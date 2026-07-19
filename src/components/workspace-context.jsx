@@ -221,11 +221,12 @@ export function WorkspaceProvider({ user, children }) {
         try {
           const form = new FormData();
           form.append("file", file);
-          const { document } = await apiFetch("/api/upload", { method: "POST", body: form });
+          const { document, notice } = await apiFetch("/api/upload", { method: "POST", body: form });
           docHtmlRef.current.set(document.id, document.contentHtml || "");
           addTab(document);
           setActiveDocId(document.id);
           setDocsVersion((v) => v + 1);
+          if (notice) showToast(notice, "info");
         } catch (e) {
           showToast(e.message);
         }
@@ -296,9 +297,18 @@ export function WorkspaceProvider({ user, children }) {
         addTab(document);
         setActiveDocId(docId);
       } else {
-        docHtmlRef.current.set(docId, afterHtml);
         editorApiRef.current?.setContent(afterHtml);
-        const patch = { contentHtml: afterHtml };
+        // What the editor actually renders is the truth — if it matches the
+        // original, the "edit" was invisible and we say so instead of lying.
+        const appliedHtml = editorApiRef.current?.getHTML() ?? afterHtml;
+        if (edits.length && appliedHtml === beforeHtml) {
+          showToast(
+            "Those changes couldn't be applied — the formatting isn't supported. Try phrasing the request differently."
+          );
+          return false;
+        }
+        docHtmlRef.current.set(docId, appliedHtml);
+        const patch = { contentHtml: appliedHtml };
         if (newTitle) {
           patch.title = newTitle;
           setOpenDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, title: newTitle } : d)));
@@ -313,7 +323,7 @@ export function WorkspaceProvider({ user, children }) {
         summary: summary || "AI edit",
         ops: edits,
         beforeHtml,
-        afterHtml,
+        afterHtml: editorApiRef.current?.getHTML() ?? afterHtml,
         status: "applied",
       });
       return true;
@@ -370,14 +380,14 @@ export function WorkspaceProvider({ user, children }) {
       const hasEdits = assistant.edits?.length > 0;
 
       if (hasEdits && settings.autoApply) {
-        assistant.appliedStatus = "applied";
         setMessages((prev) => [...prev, assistant]);
-        await applyEdits({
+        const ok = await applyEdits({
           edits: assistant.edits,
           summary: assistant.editSummary,
           chatId: resp.chat.id,
           newTitle: resp.docTitle,
         });
+        markMessage(assistant.id, { appliedStatus: ok ? "applied" : "failed" });
       } else if (hasEdits) {
         assistant.appliedStatus = "pending";
         setMessages((prev) => [...prev, assistant]);
@@ -411,7 +421,7 @@ export function WorkspaceProvider({ user, children }) {
   const approvePendingChange = async () => {
     if (!pendingChange) return;
     const ok = await applyEdits(pendingChange);
-    if (ok) markMessage(pendingChange.messageId, { appliedStatus: "applied" });
+    markMessage(pendingChange.messageId, { appliedStatus: ok ? "applied" : "failed" });
     setPendingChange(null);
   };
 

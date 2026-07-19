@@ -78,6 +78,51 @@ const WORD_HIGHLIGHTS = {
   black: "#000000", white: "#ffffff",
 };
 
+// Mammoth deliberately drops text colors, and run shading (w:shd) entirely —
+// pull styled runs straight out of the DOCX XML (in document order, merged
+// per paragraph) and re-apply them after conversion.
+async function extractDocxRunStyles(buffer) {
+  try {
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")?.async("string");
+    if (!xml) return [];
+
+    const decode = (s) =>
+      s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+    const styled = [];
+    for (const paragraph of xml.match(/<w:p\b[\s\S]*?<\/w:p>/g) || []) {
+      let current = null; // merge consecutive runs with identical styling
+      for (const run of paragraph.match(/<w:r\b[\s\S]*?<\/w:r>/g) || []) {
+        let color = run.match(/<w:color[^>]*w:val="([0-9A-Fa-f]{6})"/)?.[1]?.toLowerCase() || null;
+        if (color === "000000") color = null;
+        let shading = run.match(/<w:shd[^>]*w:fill="([0-9A-Fa-f]{6})"/)?.[1]?.toLowerCase() || null;
+        if (shading === "ffffff") shading = null;
+        const text = decode(
+          [...run.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map((m) => m[1]).join("")
+        );
+        if ((color || shading) && text) {
+          if (current && current.color === color && current.shading === shading) {
+            current.text += text;
+          } else {
+            if (current) styled.push(current);
+            current = { color, shading, text };
+          }
+        } else {
+          if (current) styled.push(current);
+          current = null;
+        }
+      }
+      if (current) styled.push(current);
+    }
+    return styled
+      .map((s) => ({ ...s, text: s.text.trim() }))
+      .filter((s) => s.text.length >= 2 && s.text.length <= 300);
+  } catch {
+    return [];
+  }
+}
+
 async function parseDocx(buffer) {
   const { default: mammoth } = await import("mammoth");
   const styleMap = [
@@ -88,10 +133,21 @@ async function parseDocx(buffer) {
   ];
   const result = await mammoth.convertToHtml({ buffer }, { styleMap });
   // Classes don't survive sanitization — turn them into inline styles now.
-  return result.value.replace(/<mark class="hl-(\w+)">/g, (match, color) => {
+  let html = result.value.replace(/<mark class="hl-(\w+)">/g, (match, color) => {
     const hex = WORD_HIGHLIGHTS[color] || WORD_HIGHLIGHTS.yellow;
     return `<mark style="background-color:${hex}">`;
   });
+  // Re-apply the text colors and run shading mammoth dropped. Shading wraps
+  // outside, color inside: <mark…><span…>text</span></mark>.
+  for (const { text, color, shading } of await extractDocxRunStyles(buffer)) {
+    const open =
+      (shading ? `<mark style="background-color:#${shading}">` : "") +
+      (color ? `<span style="color:#${color}">` : "");
+    const close = (color ? "</span>" : "") + (shading ? "</mark>" : "");
+    const wrapped = wrapPlainText(html, text, open, close);
+    if (wrapped) html = wrapped;
+  }
+  return html;
 }
 
 const MAX_PDF_IMAGES = 8;
@@ -238,7 +294,7 @@ async function extractMarkupAnnotations(pdf) {
 // Wrap the first plain-text occurrence of `text` with open/close tags,
 // skipping regions that are already links, marks, u/s runs, or float tails.
 const PROTECTED_SEGMENTS =
-  /(<a [\s\S]*?<\/a>|<mark[\s\S]*?<\/mark>|<u>[\s\S]*?<\/u>|<s>[\s\S]*?<\/s>|<span[^>]*float:\s*right[^>]*>[\s\S]*?<\/span>)/gi;
+  /(<a [\s\S]*?<\/a>|<mark[\s\S]*?<\/mark>|<u>[\s\S]*?<\/u>|<s>[\s\S]*?<\/s>|<span[^>]*style="[^"]*(?:float|color)[^"]*"[^>]*>[\s\S]*?<\/span>)/gi;
 
 // Returns the wrapped html, or null when the text wasn't found in plain form.
 function wrapPlainText(html, text, open, close) {
@@ -351,6 +407,15 @@ async function parsePdf(buffer) {
   } catch (err) {
     aiError = err; // e.g. quota exhausted — try the text fallback first
   }
+  // Designed graphics (certificates, posters): almost no text, no extractable
+  // raster images — the artwork is vector drawing instructions that cannot
+  // become editable content. Import the text, but say so honestly.
+  const designNotice =
+    hasTextLayer && rasters.length === 0 && pdf.numPages <= 2 &&
+    textPages.join("").trim().length < 400
+      ? "This PDF looks like a designed graphic (certificate/poster). Its text was imported, but vector artwork can't become an editable document — keep the original file for sharing as-is."
+      : null;
+
   if (structured) {
     // Swap `pdf:N` placeholders for embedded images…
     let html = structured.replace(/<img[^>]*src="pdf:(\d+)"[^>]*\/?>/gi, (match, n) => {
@@ -373,7 +438,7 @@ async function parsePdf(buffer) {
     // the model did with them.
     html = ensureLinks(html, anchors);
     html = ensureMarkup(html, markups);
-    return html;
+    return { html, notice: designNotice };
   }
 
   // Fallback (no API key / oversized / model error): plain text extraction.
@@ -390,7 +455,7 @@ async function parsePdf(buffer) {
       { code: "empty_pdf" }
     );
   }
-  return fallbackHtml;
+  return { html: fallbackHtml, notice: designNotice };
 }
 
 async function parseRtf(buffer) {
@@ -411,14 +476,18 @@ async function parseMarkdown(buffer) {
 export async function parseFileToHtml({ buffer, filename }) {
   const ext = fileExtension(filename);
   let rawHtml;
+  let notice = null;
 
   switch (ext) {
     case "docx":
       rawHtml = await parseDocx(buffer);
       break;
-    case "pdf":
-      rawHtml = await parsePdf(buffer);
+    case "pdf": {
+      const pdfResult = await parsePdf(buffer);
+      rawHtml = pdfResult.html;
+      notice = pdfResult.notice;
       break;
+    }
     case "rtf":
       rawHtml = await parseRtf(buffer);
       break;
@@ -445,5 +514,6 @@ export async function parseFileToHtml({ buffer, filename }) {
     html,
     text: htmlToText(html),
     title: titleFromFilename(filename),
+    notice,
   };
 }

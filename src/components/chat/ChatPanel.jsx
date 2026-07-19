@@ -102,6 +102,11 @@ function EditChips({ edits, status }) {
           Dismissed
         </span>
       )}
+      {status === "failed" && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+          <TriangleAlert size={11} /> Couldn&apos;t apply
+        </span>
+      )}
     </div>
   );
 }

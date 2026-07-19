@@ -20,6 +20,9 @@ const STYLE_PROPS = {
   float: [/^right$/],
 };
 
+// Exported so the AI layer can detect (and retry) styles that would be stripped.
+export const ALLOWED_STYLE_PROP_NAMES = Object.keys(STYLE_PROPS);
+
 const OPTIONS = {
   allowedTags: [
     "h1", "h2", "h3", "h4", "h5", "h6",

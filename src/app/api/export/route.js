@@ -42,7 +42,13 @@ export async function POST(request) {
   try {
     if (format === "docx") {
       const { default: htmlToDocx } = await import("html-to-docx");
-      const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${DOC_STYLES}</style></head><body>${flattenTailSpans(html)}</body></html>`;
+      // html-to-docx ignores <mark> but maps span background-color to real
+      // Word shading — swap so highlights survive the export.
+      const docxHtml = flattenTailSpans(html).replace(
+        /<mark style="background-color:([^"]+)"[^>]*>([\s\S]*?)<\/mark>/gi,
+        '<span style="background-color:$1">$2</span>'
+      );
+      const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${DOC_STYLES}</style></head><body>${docxHtml}</body></html>`;
       const buffer = await htmlToDocx(fullHtml, null, {
         title,
         font: "Calibri",

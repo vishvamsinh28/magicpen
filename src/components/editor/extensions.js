@@ -2,7 +2,7 @@
 
 import { Extension, Mark } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { TextStyle, Color, FontSize } from "@tiptap/extension-text-style";
+import { TextStyle, Color, FontSize, FontFamily } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
@@ -34,6 +34,22 @@ const BlockSpacing = Extension.create({
             parseHTML: (element) => element.style.color || null,
             renderHTML: (attributes) =>
               attributes.color ? { style: `color: ${attributes.color}` } : {},
+          },
+          // Block-level font size (RTF import emits it on paragraphs).
+          fontSize: {
+            default: null,
+            parseHTML: (element) => element.style.fontSize || null,
+            renderHTML: (attributes) =>
+              attributes.fontSize ? { style: `font-size: ${attributes.fontSize}` } : {},
+          },
+          // Whole-block background ("give the title a yellow background").
+          backgroundColor: {
+            default: null,
+            parseHTML: (element) => element.style.backgroundColor || null,
+            renderHTML: (attributes) =>
+              attributes.backgroundColor
+                ? { style: `background-color: ${attributes.backgroundColor}` }
+                : {},
           },
         },
       },
@@ -89,10 +105,11 @@ export function createExtensions() {
     TextStyle,
     Color,
     FontSize,
+    FontFamily,
     BlockSpacing,
     TailSpan,
     Highlight.configure({ multicolor: true }),
-    TextAlign.configure({ types: ["heading", "paragraph"] }),
+    TextAlign.configure({ types: ["heading", "paragraph", "listItem", "blockquote"] }),
     Image.configure({ allowBase64: true }),
     TableKit.configure({
       table: { resizable: true },

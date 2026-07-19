@@ -63,5 +63,5 @@ export async function POST(request) {
     });
   }
 
-  return Response.json({ document }, { status: 201 });
+  return Response.json({ document, notice: parsed.notice || null }, { status: 201 });
 }

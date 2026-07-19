@@ -1,4 +1,4 @@
-import { cleanDocHtml } from "./sanitize";
+import { cleanDocHtml, ALLOWED_STYLE_PROP_NAMES } from "./sanitize";
 
 // Gemini-backed document assistant. The model receives the document as
 // numbered HTML blocks and returns JSON edit operations that the client
@@ -38,7 +38,7 @@ Rules:
 1. Edit only what the user asked for. Preserve every other block exactly — never use setDocument for a local change.
 2. Inside blocks you edit, keep existing formatting (bold, links, colors, alignment) unless the user asks to change it.
 3. Allowed tags: h1-h6, p, ul, ol, li, blockquote, pre, code, table, thead, tbody, tr, th, td, img, a, strong, em, u, s, span, mark, br, hr.
-4. Styling goes in inline styles: color, background-color, font-size (e.g. "18px"), line-height (e.g. "1.5"), text-align. To color a whole block, put the style on the block element itself — works on <p>, <h1>-<h6>, <ul>, <ol>, <li>, and <blockquote> (e.g. <p style="color:#1d4ed8">…</p>, <ul style="color:#1d4ed8">…</ul>); for part of a line use <span style="color:…">. For bold/italic/underline/strikethrough ALWAYS prefer the tags <strong>, <em>, <u>, <s> wrapped around the text (block-level font-weight/font-style/text-decoration styles also work, but tags are more reliable). To highlight text use <mark style="background-color:#fef08a">…</mark> (pick a fitting color). <span style="float: right">…</span> puts text flush right on the same line (used for location/date columns) — preserve such spans when editing blocks that contain them.
+4. Styling uses inline styles, and ONLY these CSS properties exist — anything else is stripped and the user sees no change: color, background-color, font-size (px), line-height, text-align, font-family, font-weight, font-style, text-decoration, float (right only). They work on whole blocks (<p>, <h1>-<h6>, <ul>, <ol>, <li>, <blockquote>) and on <span> for part of a line. For bold/italic/underline/strikethrough ALWAYS prefer the tags <strong>, <em>, <u>, <s>. To highlight text use <mark style="background-color:#fef08a">…</mark>. <span style="float: right">…</span> puts text flush right on the same line — preserve such spans when editing blocks that contain them. Effects with no property here must be achieved differently: UPPERCASE or lowercase → rewrite the text itself in that case; wider gaps between lines/paragraphs → line-height; NEVER use margin, padding, letter-spacing, text-transform, border, box-shadow, or display.
 5. To translate or rewrite the whole document, prefer one replace op per block so structure stays aligned.
 6. When the document is empty and the user asks to create, write, draft, or load a template, produce a complete well-structured document with setDocument and set "title".
 7. Questions about the document get "edits": [] and the answer in "reply".
@@ -117,6 +117,36 @@ function sanitizeResult(raw) {
   return { reply: reply || (edits.length ? "Done — I've updated the document." : "Okay."), edits, title };
 }
 
+// CSS properties the model used that the sanitizer would strip — the classic
+// "AI says done, user sees nothing" failure.
+function findUnsupportedStyleProps(rawEdits) {
+  const bad = new Set();
+  for (const edit of rawEdits || []) {
+    if (!edit?.html) continue;
+    for (const match of String(edit.html).matchAll(/style="([^"]*)"/gi)) {
+      for (const declaration of match[1].split(";")) {
+        const prop = declaration.split(":")[0]?.trim().toLowerCase();
+        if (prop && !ALLOWED_STYLE_PROP_NAMES.includes(prop)) bad.add(prop);
+      }
+    }
+  }
+  return [...bad];
+}
+
+const normalizeHtml = (s) =>
+  String(s || "").replace(/\s+/g, " ").replace(/>\s+</g, "><").trim();
+
+// Replace ops that resend the block unchanged — nothing would visibly happen.
+function allEditsNoop(edits, blocks) {
+  if (!edits.length) return false;
+  return edits.every(
+    (edit) =>
+      edit.op === "replace" &&
+      Number.isInteger(edit.index) &&
+      normalizeHtml(edit.html) === normalizeHtml(blocks[edit.index])
+  );
+}
+
 export function summarizeEdits(edits) {
   if (!edits?.length) return null;
   const labels = edits.map((e) => {
@@ -139,7 +169,7 @@ const PDF_CONVERT_PROMPT = `Convert this PDF document into clean, semantic HTML 
 Requirements:
 1. Preserve ALL text exactly as written — never summarize, rephrase, reorder, add, or omit anything.
 2. Use the correct structure: h1 for the document title, h2/h3 for section headings, p for paragraphs, ul/ol + li for bullet and numbered lists, table/tr/th/td for tabular data.
-3. Preserve inline formatting: <strong> for bold, <em> for italics, <u> for underline, <s> for strikethrough. If text is visibly highlighted with a background color (a marker/highlighter effect), wrap it in <mark style="background-color:#RRGGBB"> using a hex close to the visible color (e.g. #ffff00 yellow, #00ffff cyan, #00ff00 green).
+3. Preserve inline formatting: <strong> for bold, <em> for italics, <u> for underline, <s> for strikethrough. If text is visibly highlighted with a background color (a marker/highlighter effect), wrap it in <mark style="background-color:#RRGGBB"> using a hex close to the visible color (e.g. #ffff00 yellow, #00ffff cyan, #00ff00 green). Preserve visible TEXT COLORS too: non-black text gets <span style="color:#RRGGBB">…</span> (or the color style on the whole block when the entire block is that color) with a hex close to the visible color.
 4. Preserve hyperlinks as <a href="...">text</a> — include every link, whether it appears as a URL or as linked text (check link annotations).
 5. For multi-column layouts, linearize into natural reading order.
 6. When a line pairs left-aligned text with right-aligned text, keep both in ONE element and wrap the right-hand part in <span style="float: right">…</span>. This applies to entry rows (company ↔ location, role or degree ↔ dates) AND to the document header: when contact details sit right-aligned opposite the name, pair each line exactly as printed. Example header where "Email" shares the name's line and "Mobile" shares the links' line:
@@ -367,19 +397,36 @@ export async function runAssistant({
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await callModel(contents);
     parsed = parse(response.text);
-    const attempted = Array.isArray(parsed?.edits) ? parsed.edits.length : 0;
+    const rawEdits = Array.isArray(parsed?.edits) ? parsed.edits : [];
     const result = sanitizeResult(parsed);
-    // Success, or nothing was attempted — done. Otherwise the model produced
-    // edits that didn't survive validation (e.g. missing html): correct once.
-    if (attempt === 1 || attempted === 0 || result.edits.length > 0) return result;
-    console.warn("[superdocs] AI returned incomplete edit ops — retrying once");
+
+    // Self-check: catch the ways an edit can "succeed" without the user ever
+    // seeing a change, and make the model correct itself once.
+    const problems = [];
+    if (rawEdits.length && result.edits.length === 0) {
+      problems.push(
+        'Every replace/insertAfter/insertBefore op must include the complete "html" string (the full edited block) — yours were missing or invalid.'
+      );
+    }
+    const badProps = findUnsupportedStyleProps(rawEdits);
+    if (badProps.length) {
+      problems.push(
+        `You used unsupported style properties (${badProps.join(", ")}) which get stripped — the user would see NO change. Only these work: ${ALLOWED_STYLE_PROP_NAMES.join(", ")}. Achieve the effect with supported means (uppercase → rewrite the text in capitals; spacing → line-height; emphasis → <strong>/<em>/<u>/<s>/<mark>).`
+      );
+    }
+    if (allEditsNoop(result.edits, blocks)) {
+      problems.push(
+        "Your replace ops resent the blocks UNCHANGED — nothing would happen. Actually apply the requested modification to the content."
+      );
+    }
+
+    if (!problems.length || attempt === 1) return result;
+    console.warn("[superdocs] AI edit self-check failed, retrying once:", problems.join(" | "));
     contents.push(
       { role: "model", parts: [{ text: response.text }] },
       {
         role: "user",
-        parts: [{
-          text: 'Your previous JSON was invalid: every replace/insertAfter/insertBefore op must include the complete "html" string (the full edited block). Resend the entire corrected JSON now.',
-        }],
+        parts: [{ text: `Fix your response and resend the ENTIRE corrected JSON. ${problems.join(" ")}` }],
       }
     );
   }
