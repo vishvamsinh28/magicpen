@@ -21,6 +21,7 @@ MongoDB. Auth is first-party (scrypt password hashing + JWT sessions); Supabase 
 - 📝 **Templates**: NDA, rent agreement, cover letter, meeting notes, proposal, invoice, resume
 - 🛡️ **Review Mode**: approve or dismiss proposed changes before they land
 - 🔄 **Changes history** per document with one-click restore
+- 🗑️ **Bulk actions** — multi-select documents or chats and delete them in one pass
 - 💬 **Chat history**, multi-document tabs, zoom, mobile-responsive layout
 
 ## Pages
