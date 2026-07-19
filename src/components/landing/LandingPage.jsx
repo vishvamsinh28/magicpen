@@ -129,13 +129,13 @@ export default function LandingPage() {
           </a>
           <Link
             href="/login"
-            className="rounded-lg border-[1.5px] border-frame bg-paper px-3.5 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-cream"
+            className="whitespace-nowrap rounded-lg border-[1.5px] border-frame bg-paper px-3 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-cream md:px-3.5"
           >
             Sign in
           </Link>
           <Link
             href={primaryHref}
-            className="rounded-lg bg-accent px-3.5 py-2 text-[13.5px] font-semibold text-white shadow-card transition-colors hover:bg-accent-deep"
+            className="whitespace-nowrap rounded-lg bg-accent px-3 py-2 text-[13.5px] font-semibold text-white shadow-card transition-colors hover:bg-accent-deep md:px-3.5"
           >
             Get started
           </Link>
@@ -160,17 +160,17 @@ export default function LandingPage() {
           ask in plain English, and SuperDocs edits only what you asked for — your formatting,
           tables, and footnotes survive.
         </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-8 flex items-center justify-center gap-2.5 md:gap-3">
           <Link
             href={primaryHref}
-            className="flex items-center gap-2 rounded-lg bg-accent px-6 py-3 text-[15px] font-semibold text-white shadow-card transition-colors hover:bg-accent-deep"
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-accent px-4 py-2.5 text-[14px] font-semibold text-white shadow-card transition-colors hover:bg-accent-deep md:gap-2 md:px-6 md:py-3 md:text-[15px]"
           >
             {primaryLabel}
             <ArrowRight size={16} />
           </Link>
           <a
             href="#features"
-            className="rounded-lg border-[1.5px] border-frame bg-paper px-6 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-cream"
+            className="whitespace-nowrap rounded-lg border-[1.5px] border-frame bg-paper px-4 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:bg-cream md:px-6 md:py-3 md:text-[15px]"
           >
             See what it does
           </a>
