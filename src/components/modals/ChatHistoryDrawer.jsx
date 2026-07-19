@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import { MessageSquare, Search, X, Trash2, Loader2, Waypoints } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiFetch, timeAgo } from "@/lib/client-utils";
 
 export default function ChatHistoryDrawer() {
   const ws = useWorkspace();
   const [chats, setChats] = useState(null);
   const [query, setQuery] = useState("");
+  const [confirmChat, setConfirmChat] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!ws.historyOpen) return;
@@ -29,10 +32,14 @@ export default function ChatHistoryDrawer() {
     c.title.toLowerCase().includes(query.toLowerCase().trim())
   );
 
-  const remove = async (chat) => {
-    if (!window.confirm(`Delete chat "${chat.title}"?`)) return;
-    await ws.deleteChat(chat.id);
-    setChats((prev) => prev?.filter((c) => c.id !== chat.id));
+  const remove = async () => {
+    const chat = confirmChat;
+    if (!chat || deleting) return;
+    setDeleting(true);
+    const ok = await ws.deleteChat(chat.id);
+    setDeleting(false);
+    setConfirmChat(null);
+    if (ok) setChats((prev) => prev?.filter((c) => c.id !== chat.id));
   };
 
   return (
@@ -99,7 +106,7 @@ export default function ChatHistoryDrawer() {
                 aria-label={`Delete chat ${chat.title}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  remove(chat);
+                  setConfirmChat(chat);
                 }}
                 className="mt-0.5 shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-opacity hover:bg-cream hover:text-red-600 group-hover:opacity-100"
               >
@@ -109,6 +116,15 @@ export default function ChatHistoryDrawer() {
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmChat}
+        title={`Delete chat "${confirmChat?.title}"?`}
+        message="Its messages will be gone for good."
+        busy={deleting}
+        onConfirm={remove}
+        onCancel={() => setConfirmChat(null)}
+      />
     </div>
   );
 }

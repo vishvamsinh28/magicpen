@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Plus, EllipsisVertical, FileText, Loader2, FolderOpen, Pencil, Trash2, Download } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import PromptDialog from "@/components/ui/PromptDialog";
 import Dropdown from "@/components/ui/Dropdown";
 import { apiFetch, timeAgo } from "@/lib/client-utils";
 
@@ -50,6 +52,10 @@ function DocCard({ doc, onOpen, onRename, onDelete }) {
 export default function FilesModal() {
   const ws = useWorkspace();
   const [docs, setDocs] = useState(null);
+  const [confirmDoc, setConfirmDoc] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     if (!ws.filesOpen) return;
@@ -63,17 +69,31 @@ export default function FilesModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws.filesOpen]);
 
-  const rename = async (doc) => {
-    const title = window.prompt("Rename document", doc.title);
-    if (!title?.trim() || title === doc.title) return;
-    await ws.renameDocument(doc.id, title.trim());
-    setDocs((prev) => prev?.map((d) => (d.id === doc.id ? { ...d, title: title.trim() } : d)));
+  const rename = async (title) => {
+    const doc = renameTarget;
+    const next = title.trim();
+    if (!doc || renaming) return;
+    if (!next || next === doc.title) {
+      setRenameTarget(null);
+      return;
+    }
+    setRenaming(true);
+    const ok = await ws.renameDocument(doc.id, next);
+    setRenaming(false);
+    setRenameTarget(null);
+    if (ok) setDocs((prev) => prev?.map((d) => (d.id === doc.id ? { ...d, title: next } : d)));
   };
 
-  const remove = async (doc) => {
-    if (!window.confirm(`Delete "${doc.title}"? This can't be undone.`)) return;
-    await ws.deleteDocument(doc.id);
-    setDocs((prev) => prev?.filter((d) => d.id !== doc.id));
+  const remove = async () => {
+    const doc = confirmDoc;
+    if (!doc || deleting) return;
+    setDeleting(true);
+    const ok = await ws.deleteDocument(doc.id);
+    setDeleting(false);
+    setConfirmDoc(null);
+    // Only drop the card once the server confirmed — otherwise the doc
+    // reappeared on the next open and looked undeletable.
+    if (ok) setDocs((prev) => prev?.filter((d) => d.id !== doc.id));
   };
 
   return (
@@ -117,13 +137,32 @@ export default function FilesModal() {
                 key={doc.id}
                 doc={doc}
                 onOpen={() => ws.openDocument(doc.id)}
-                onRename={() => rename(doc)}
-                onDelete={() => remove(doc)}
+                onRename={() => setRenameTarget(doc)}
+                onDelete={() => setConfirmDoc(doc)}
               />
             ))}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDoc}
+        title={`Delete "${confirmDoc?.title}"?`}
+        message="This can't be undone."
+        busy={deleting}
+        onConfirm={remove}
+        onCancel={() => setConfirmDoc(null)}
+      />
+
+      <PromptDialog
+        open={!!renameTarget}
+        title="Rename document"
+        defaultValue={renameTarget?.title}
+        confirmLabel="Rename"
+        busy={renaming}
+        onSubmit={rename}
+        onCancel={() => setRenameTarget(null)}
+      />
     </Modal>
   );
 }

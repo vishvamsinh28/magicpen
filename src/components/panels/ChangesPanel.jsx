@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { History, MessageSquare, RotateCcw, Loader2 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiFetch, timeAgo } from "@/lib/client-utils";
 
 const STATUS_STYLES = {
@@ -17,6 +18,8 @@ export default function ChangesPanel() {
   const { activeDoc, activeDocId, changesVersion } = ws;
   const [changes, setChanges] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [confirmChange, setConfirmChange] = useState(null);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     if (!activeDocId) {
@@ -87,11 +90,7 @@ export default function ChangesPanel() {
               </p>
               {change.status !== "rejected" && change.beforeHtml != null && (
                 <button
-                  onClick={() => {
-                    if (window.confirm("Roll the document back to before this change? Later edits will be undone.")) {
-                      ws.restoreChange(change);
-                    }
-                  }}
+                  onClick={() => setConfirmChange(change)}
                   className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
                 >
                   <RotateCcw size={11} />
@@ -102,6 +101,23 @@ export default function ChangesPanel() {
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmChange}
+        title="Roll back this change?"
+        message="The document returns to how it was before this change. Later edits will be undone."
+        confirmLabel="Restore"
+        danger={false}
+        busy={restoring}
+        onConfirm={async () => {
+          if (restoring) return;
+          setRestoring(true);
+          await ws.restoreChange(confirmChange);
+          setRestoring(false);
+          setConfirmChange(null);
+        }}
+        onCancel={() => setConfirmChange(null)}
+      />
     </div>
   );
 }

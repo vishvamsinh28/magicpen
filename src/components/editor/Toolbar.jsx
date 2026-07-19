@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useEditorState } from "@tiptap/react";
 import {
   Undo2, Redo2, Bold, Italic, Underline, Strikethrough,
@@ -10,6 +11,7 @@ import {
   RemoveFormatting, Rows3, Columns3, Trash2,
 } from "lucide-react";
 import Dropdown from "@/components/ui/Dropdown";
+import PromptDialog from "@/components/ui/PromptDialog";
 
 const FONT_SIZES = ["Default", "10", "12", "14", "16", "18", "20", "24", "28", "32"];
 const SPACINGS = ["Default", "1.0", "1.15", "1.5", "2.0", "2.5", "3.0"];
@@ -94,6 +96,8 @@ function Swatches({ title, colors, current, onPick }) {
 }
 
 export default function Toolbar({ editor }) {
+  // null = closed; otherwise the link href being edited ("" for a new link).
+  const [linkDraft, setLinkDraft] = useState(null);
   const s = useEditorState({
     editor,
     selector: ({ editor: ed }) =>
@@ -147,13 +151,7 @@ export default function Toolbar({ editor }) {
         {
           label: s?.inLink ? "Edit link" : "Insert link",
           icon: <LinkIcon size={15} />,
-          onSelect: () => {
-            const prev = editor.getAttributes("link").href || "";
-            const url = window.prompt("Link URL", prev);
-            if (url === null) return;
-            if (!url) return editor.chain().focus().unsetLink().run();
-            editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-          },
+          onSelect: () => setLinkDraft(editor.getAttributes("link").href || ""),
         },
         ...(s?.inLink
           ? [{ label: "Remove link", icon: <Unlink size={15} />, onSelect: run((c) => c.unsetLink()) }]
@@ -278,6 +276,22 @@ export default function Toolbar({ editor }) {
         }
         items={moreItems}
         menuClassName="max-h-80 overflow-y-auto"
+      />
+
+      <PromptDialog
+        open={linkDraft !== null}
+        title={linkDraft ? "Edit link" : "Insert link"}
+        placeholder="https://example.com"
+        defaultValue={linkDraft ?? ""}
+        confirmLabel="Apply"
+        allowEmpty
+        onSubmit={(url) => {
+          setLinkDraft(null);
+          const href = url.trim();
+          if (!href) editor?.chain().focus().unsetLink().run();
+          else editor?.chain().focus().extendMarkRange("link").setLink({ href }).run();
+        }}
+        onCancel={() => setLinkDraft(null)}
       />
     </div>
   );

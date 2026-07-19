@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, cloneElement } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, cloneElement } from "react";
+import { createPortal } from "react-dom";
 
 // Popover menu using fixed positioning so it never gets clipped by
 // overflow containers (toolbar scroll area, chat composer, etc.).
@@ -14,8 +15,22 @@ export default function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
+  const [flipUp, setFlipUp] = useState(false);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
+
+  // A menu near the viewport bottom would render its last items (e.g. the
+  // file card's Delete) off-screen — measure after mount and open upward
+  // instead when it clips and there's room above. Runs before paint.
+  useLayoutEffect(() => {
+    if (!open || !rect || direction === "up") {
+      setFlipUp(false);
+      return;
+    }
+    const box = menuRef.current?.getBoundingClientRect();
+    if (!box) return;
+    setFlipUp(box.bottom > window.innerHeight - 8 && rect.top > box.height + 12);
+  }, [open, rect, direction]);
 
   useEffect(() => {
     if (!open) return;
@@ -26,7 +41,9 @@ export default function Dropdown({
     };
     const onKey = (e) => e.key === "Escape" && setOpen(false);
     const onScroll = (e) => {
-      if (menuRef.current?.contains(e.target)) return;
+      // Also runs for window resize, where e.target is `window` — not a Node,
+      // which contains() rejects. Non-Node targets always close the menu.
+      if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
       setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
@@ -53,7 +70,7 @@ export default function Dropdown({
     ? {
         position: "fixed",
         zIndex: 90,
-        ...(direction === "up"
+        ...(direction === "up" || flipUp
           ? { bottom: window.innerHeight - rect.top + 6 }
           : { top: rect.bottom + 6 }),
         ...(align === "right"
@@ -74,12 +91,16 @@ export default function Dropdown({
           "data-open": open || undefined,
         })}
       </span>
-      {open && (
-        <div
-          ref={menuRef}
-          style={style}
-          className={`min-w-44 max-w-[260px] rounded-lg border border-line bg-paper p-1 shadow-pop sd-pop-in ${menuClassName}`}
-        >
+      {/* Portal to <body>: hosts with a persistent CSS transform (e.g. the
+          files modal's sd-pop-in) re-anchor fixed positioning to themselves,
+          which pushed the menu away from its trigger once the host scrolled. */}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={style}
+            className={`min-w-44 max-w-[260px] rounded-lg border border-line bg-paper p-1 shadow-pop sd-pop-in ${menuClassName}`}
+          >
           {items
             ? items.map((item, i) =>
                 item === "divider" ? (
@@ -113,8 +134,9 @@ export default function Dropdown({
                 )
               )
             : children?.(close)}
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }

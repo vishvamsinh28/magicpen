@@ -302,6 +302,11 @@ body {
   }
   body.sd-printing .print-sheet {
     display: block;
+    /* Browsers omit background colors when printing unless "Background
+       graphics" is enabled — force them (inherited by every descendant) so
+       text highlights and table shading survive into the saved PDF. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* Real-document typography for print — compact like a Word/LaTeX page,

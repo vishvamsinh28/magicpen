@@ -43,10 +43,14 @@ export async function POST(request) {
     if (format === "docx") {
       const { default: htmlToDocx } = await import("html-to-docx");
       // html-to-docx ignores <mark> but maps span background-color to real
-      // Word shading — swap so highlights survive the export.
+      // Word shading — swap so highlights survive the export. Marks with no
+      // inline color (AI edits, pasted HTML) get the editor's default yellow.
       const docxHtml = flattenTailSpans(html).replace(
-        /<mark style="background-color:([^"]+)"[^>]*>([\s\S]*?)<\/mark>/gi,
-        '<span style="background-color:$1">$2</span>'
+        /<mark\b([^>]*)>([\s\S]*?)<\/mark>/gi,
+        (_, attrs, inner) => {
+          const color = /background-color:\s*([^;"']+)/i.exec(attrs)?.[1].trim() || "#fef08a";
+          return `<span style="background-color:${color}">${inner}</span>`;
+        }
       );
       const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${DOC_STYLES}</style></head><body>${docxHtml}</body></html>`;
       const buffer = await htmlToDocx(fullHtml, null, {

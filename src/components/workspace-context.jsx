@@ -250,12 +250,14 @@ export function WorkspaceProvider({ user, children }) {
   };
 
   const renameDocument = async (id, title) => {
-    if (!title?.trim()) return;
+    if (!title?.trim()) return false;
     try {
       await apiFetch(`/api/documents/${id}`, { method: "PATCH", body: JSON.stringify({ title }) });
       setOpenDocs((prev) => prev.map((d) => (d.id === id ? { ...d, title } : d)));
+      return true;
     } catch (e) {
       showToast(e.message);
+      return false;
     }
   };
 
@@ -264,8 +266,10 @@ export function WorkspaceProvider({ user, children }) {
       await apiFetch(`/api/documents/${id}`, { method: "DELETE" });
       docHtmlRef.current.delete(id);
       closeDocument(id);
+      return true;
     } catch (e) {
       showToast(e.message);
+      return false;
     }
   };
 
@@ -476,8 +480,10 @@ export function WorkspaceProvider({ user, children }) {
     try {
       await apiFetch(`/api/chats/${id}`, { method: "DELETE" });
       if (id === chatId) newConversation();
+      return true;
     } catch (e) {
       showToast(e.message);
+      return false;
     }
   };
 
