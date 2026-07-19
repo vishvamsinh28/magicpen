@@ -14,13 +14,16 @@ import TemplatesModal from "./modals/TemplatesModal";
 import ChatHistoryDrawer from "./modals/ChatHistoryDrawer";
 import InfoModals from "./modals/InfoModals";
 
+// Mobile-only segmented control under the header (desktop shows both panes
+// side by side). Styled like the header's document tabs.
 function MobilePaneSwitcher() {
   const ws = useWorkspace();
   const tab = (pane, icon, label) => (
     <button
       onClick={() => ws.setMobilePane(pane)}
-      className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
-        ws.mobilePane === pane ? "bg-ink text-white" : "text-ink-soft"
+      aria-pressed={ws.mobilePane === pane}
+      className={`flex flex-1 items-center justify-center gap-1.5 rounded-[5px] px-4 py-2 text-[13px] font-semibold transition-colors ${
+        ws.mobilePane === pane ? "bg-ink text-white shadow-card" : "text-ink-soft hover:bg-cream"
       }`}
     >
       {icon}
@@ -28,8 +31,8 @@ function MobilePaneSwitcher() {
     </button>
   );
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-3.5 z-40 flex justify-center lg:hidden">
-      <div className="pointer-events-auto flex gap-1 rounded-full border-[1.5px] border-frame bg-paper p-1 shadow-pop">
+    <div className="px-3 pb-2.5 lg:hidden">
+      <div className="flex gap-1 rounded-lg border-[1.5px] border-frame bg-paper p-1">
         {tab("chat", <MessageSquare size={14} />, "Chat")}
         {tab("editor", <FileText size={14} />, "Editor")}
       </div>
@@ -41,7 +44,7 @@ function Toast() {
   const ws = useWorkspace();
   if (!ws.toast) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-16 z-[110] flex justify-center px-4 lg:bottom-6">
+    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[110] flex justify-center px-4">
       <div className="sd-pop-in pointer-events-auto flex max-w-md items-start gap-2.5 rounded-xl border border-frame bg-ink px-4 py-3 text-[13px] leading-snug text-white shadow-pop">
         {ws.toast.type === "error" && <TriangleAlert size={15} className="mt-0.5 shrink-0 text-accent" />}
         <span>{ws.toast.message}</span>
@@ -55,27 +58,27 @@ function Shell() {
   return (
     <div className="app-root flex h-dvh flex-col bg-cream">
       <Header />
+      <MobilePaneSwitcher />
       <div className="flex min-h-0 flex-1">
         <IconRail />
         <main className="flex min-h-0 min-w-0 flex-1 gap-3 px-3 pb-3 md:px-5 md:pb-4 lg:pl-1">
           <div
             className={`${
               ws.mobilePane === "chat" ? "flex" : "hidden"
-            } h-full w-full min-w-0 flex-col pb-12 lg:flex lg:w-[372px] lg:shrink-0 lg:pb-0`}
+            } h-full w-full min-w-0 flex-col lg:flex lg:w-[372px] lg:shrink-0`}
           >
             {ws.leftView === "chat" ? <ChatPanel /> : <ChangesPanel />}
           </div>
           <div
             className={`${
               ws.mobilePane === "editor" ? "flex" : "hidden"
-            } h-full w-full min-w-0 flex-1 pb-12 lg:flex lg:pb-0`}
+            } h-full w-full min-w-0 flex-1 lg:flex`}
           >
             <EditorPane />
           </div>
         </main>
       </div>
 
-      <MobilePaneSwitcher />
       <NavDrawer />
       <FilesModal />
       <TemplatesModal />
