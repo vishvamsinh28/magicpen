@@ -4,7 +4,7 @@ AI-powered document editing. Upload a document (or create one from chat), tell t
 assistant what to change in plain English, and it edits **in place** — only the relevant
 blocks are touched, so headings, tables, links, and formatting survive.
 
-Built with Next.js 16 (App Router), TipTap, Google Gemini (`gemini-3.5-flash`), and
+Built with Next.js 16 (App Router), TipTap, Google Gemini (`gemini-3.1-flash-lite`), and
 MongoDB. Auth is first-party (scrypt password hashing + JWT sessions); Supabase is used
 **only** for file storage.
 
@@ -47,7 +47,7 @@ even with an empty `.env.local` (see fallbacks below).
 | Variable | Purpose |
 | --- | --- |
 | `GEMINI_API_KEY` | Google Gemini key (aistudio.google.com/apikey) — powers the assistant |
-| `GEMINI_MODEL` | Optional — defaults to `gemini-3.5-flash`, the single model SuperDocs uses |
+| `GEMINI_MODEL` | Optional — defaults to `gemini-3.1-flash-lite`, the single model SuperDocs uses (set e.g. `gemini-3.5-flash` for top quality; its free tier is only ~20 requests/day) |
 | `AUTH_SECRET` | Signs session JWTs (`openssl rand -hex 32`). **Required in production**; auto-generated into `.data/auth-secret` in dev |
 | `MONGODB_URI`, `MONGODB_DB` | MongoDB connection — stores users, documents, chats, changes; **if unset, a local JSON store in `.data/` is used (dev only)** |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Optional, storage only — archives original uploads in a private bucket, server-side |

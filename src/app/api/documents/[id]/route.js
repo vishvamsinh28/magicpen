@@ -1,6 +1,7 @@
 import { Documents } from "@/lib/store";
 import { cleanDocHtml } from "@/lib/sanitize";
 import { getUserFromRequest, unauthorized } from "@/lib/auth";
+import { removeStoredFile } from "@/lib/storage";
 
 export async function GET(request, { params }) {
   const user = await getUserFromRequest(request);
@@ -31,6 +32,10 @@ export async function DELETE(request, { params }) {
   if (!user) return unauthorized();
 
   const { id } = await params;
+  const document = await Documents.get(id, user.id);
   await Documents.remove(id, user.id);
+  if (document?.sourceFile?.storage?.path) {
+    await removeStoredFile(document.sourceFile.storage.path);
+  }
   return Response.json({ ok: true });
 }

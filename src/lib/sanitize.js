@@ -10,6 +10,8 @@ const STYLE_PROPS = {
   "line-height": [/^\d+(\.\d+)?$/],
   "text-align": [/^(left|right|center|justify)$/],
   "font-family": [/^[\w\s,'"-]+$/],
+  // right-aligned tail on the same line (resume-style "company ↔ location" rows)
+  float: [/^right$/],
 };
 
 const OPTIONS = {

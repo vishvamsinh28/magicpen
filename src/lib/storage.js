@@ -22,6 +22,17 @@ async function client() {
   return globalThis.__superdocsSupabase;
 }
 
+export async function removeStoredFile(path) {
+  const cfg = config();
+  if (!cfg || !path) return;
+  try {
+    const supabase = await client();
+    await supabase.storage.from(cfg.bucket).remove([path]);
+  } catch (err) {
+    console.warn("[superdocs] Supabase delete skipped:", err.message);
+  }
+}
+
 export async function uploadOriginalFile({ buffer, path, contentType }) {
   const cfg = config();
   try {

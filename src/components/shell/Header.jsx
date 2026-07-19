@@ -124,7 +124,12 @@ export default function Header() {
             align="right"
             items={[
               { label: "Word (.docx)", icon: <FileType2 size={14} />, onSelect: () => ws.downloadDocument("docx") },
-              { label: "PDF (print)", icon: <Printer size={14} />, onSelect: () => ws.downloadDocument("pdf") },
+              {
+                label: "PDF (print)",
+                desc: "Choose 'Save as PDF' and turn off headers & footers",
+                icon: <Printer size={14} />,
+                onSelect: () => ws.downloadDocument("pdf"),
+              },
               { label: "Markdown (.md)", icon: <FileDown size={14} />, onSelect: () => ws.downloadDocument("md") },
               { label: "HTML (.html)", icon: <FileCode2 size={14} />, onSelect: () => ws.downloadDocument("html") },
               { label: "Plain text (.txt)", icon: <FileText size={14} />, onSelect: () => ws.downloadDocument("txt") },

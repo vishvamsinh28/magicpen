@@ -40,7 +40,8 @@ export async function POST(request) {
     });
   } catch (err) {
     console.error("[superdocs] AI request failed:", err);
-    const status = err.code === "ai_not_configured" ? 400 : 502;
+    const status =
+      err.code === "ai_not_configured" ? 400 : err.code === "ai_quota" ? 429 : 502;
     return Response.json(
       { error: { message: err.message || "The AI request failed. Please try again.", code: err.code || "ai_error" } },
       { status }

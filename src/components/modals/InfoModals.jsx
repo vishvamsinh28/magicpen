@@ -46,7 +46,7 @@ function SettingsBody() {
       </h2>
       <Section title="AI model">
         <p className="text-[12.5px]">
-          SuperDocs runs on <strong>Gemini 3.5 Flash</strong> (<code className="rounded bg-cream px-1 py-0.5 text-[11.5px]">gemini-3.5-flash</code>).
+          SuperDocs runs on <strong>Gemini 3.1 Flash-Lite</strong> (<code className="rounded bg-cream px-1 py-0.5 text-[11.5px]">gemini-3.1-flash-lite</code>).
         </p>
       </Section>
       <Section title="Editing style">
@@ -166,9 +166,9 @@ function DocsBody() {
         operations — replace, insert, delete — so untouched content is preserved exactly.
       </Section>
       <Section title="AI model">
-        Everything runs on <strong>Gemini 3.5 Flash</strong>. If the model ID ever changes, point{" "}
+        Everything runs on <strong>Gemini 3.1 Flash-Lite</strong>. To use a different model, point{" "}
         <code className="rounded bg-cream px-1 py-0.5 text-[11.5px]">GEMINI_MODEL</code> in{" "}
-        <code className="rounded bg-cream px-1 py-0.5 text-[11.5px]">.env.local</code> at the new one.
+        <code className="rounded bg-cream px-1 py-0.5 text-[11.5px]">.env.local</code> at it.
       </Section>
       <Section title="Attachments">
         Use 📎 in the chat to attach reference files. Their text is given to the assistant as

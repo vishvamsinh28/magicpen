@@ -4,9 +4,10 @@ import { cleanDocHtml } from "./sanitize";
 // numbered HTML blocks and returns JSON edit operations that the client
 // applies in place — untouched blocks are never regenerated.
 
-// One model for everything: gemini-3.5-flash (override with GEMINI_MODEL if
-// the ID ever changes).
-const MODEL_ID = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+// One model for everything: gemini-3.1-flash-lite — newest stable lite
+// generation, with the generous free-tier daily quota (gemini-3.5-flash's
+// free tier allows only ~20 requests/day). Override with GEMINI_MODEL.
+const MODEL_ID = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 
 const TEMPERATURES = { precise: 0.2, balanced: 0.6, creative: 0.95 };
 
@@ -37,7 +38,7 @@ Rules:
 1. Edit only what the user asked for. Preserve every other block exactly — never use setDocument for a local change.
 2. Inside blocks you edit, keep existing formatting (bold, links, colors, alignment) unless the user asks to change it.
 3. Allowed tags: h1-h6, p, ul, ol, li, blockquote, pre, code, table, thead, tbody, tr, th, td, img, a, strong, em, u, s, span, mark, br, hr.
-4. Styling goes in inline styles: color, background-color, font-size (e.g. "18px"), line-height (e.g. "1.5"), text-align. To highlight text use <mark style="background-color:#fef08a">…</mark> (pick a fitting color).
+4. Styling goes in inline styles: color, background-color, font-size (e.g. "18px"), line-height (e.g. "1.5"), text-align. To color a whole block, put the style on the block element itself — <p style="color:#1d4ed8">…</p> or <h2 style="color:#1d4ed8">…</h2>; for part of a line use <span style="color:…">. To highlight text use <mark style="background-color:#fef08a">…</mark> (pick a fitting color). <span style="float: right">…</span> puts text flush right on the same line (used for location/date columns) — preserve such spans when editing blocks that contain them.
 5. To translate or rewrite the whole document, prefer one replace op per block so structure stays aligned.
 6. When the document is empty and the user asks to create, write, draft, or load a template, produce a complete well-structured document with setDocument and set "title".
 7. Questions about the document get "edits": [] and the answer in "reply".
@@ -50,6 +51,17 @@ class AIConfigError extends Error {
     this.code = "ai_not_configured";
   }
 }
+
+const isQuotaError = (err) =>
+  /RESOURCE_EXHAUSTED|exceeded your current quota|"code"\s*:\s*429/i.test(String(err?.message));
+
+const quotaError = () =>
+  Object.assign(
+    new Error(
+      `Your Gemini API quota for ${MODEL_ID} is used up (the free tier allows ~20 requests/day). Wait for the daily reset or enable billing on your key, then try again.`
+    ),
+    { code: "ai_quota" }
+  );
 
 function buildUserTurn({ message, blocks, docTitle, attachments }) {
   const parts = [];
@@ -118,6 +130,87 @@ export function summarizeEdits(edits) {
     }
   });
   return [...new Set(labels)].join(" · ");
+}
+
+/* --------------------------- PDF → HTML import ---------------------------- */
+
+const PDF_CONVERT_PROMPT = `Convert this PDF document into clean, semantic HTML that faithfully preserves its content and structure.
+
+Requirements:
+1. Preserve ALL text exactly as written — never summarize, rephrase, reorder, add, or omit anything.
+2. Use the correct structure: h1 for the document title, h2/h3 for section headings, p for paragraphs, ul/ol + li for bullet and numbered lists, table/tr/th/td for tabular data.
+3. Preserve inline formatting: <strong> for bold, <em> for italics, <u> for underline.
+4. Preserve hyperlinks as <a href="...">text</a> — include every link, whether it appears as a URL or as linked text (check link annotations).
+5. For multi-column layouts, linearize into natural reading order.
+6. When a line pairs left-aligned text with right-aligned text, keep both in ONE element and wrap the right-hand part in <span style="float: right">…</span>. This applies to entry rows (company ↔ location, role or degree ↔ dates) AND to the document header: when contact details sit right-aligned opposite the name, pair each line exactly as printed. Example header where "Email" shares the name's line and "Mobile" shares the links' line:
+   <h1>Vishvamsinh Vaghela<span style="float: right">Email : x@y.com</span></h1>
+   <p><a href="...">GitHub</a> / <a href="...">LinkedIn</a><span style="float: right">Mobile : +91-0000000000</span></p>
+   Entry rows:
+   <h3>HackerRank (YC S11)<span style="float: right">Bangalore, India</span></h3>
+   <p><em>Software Engineer Intern</em><span style="float: right">Jan 2026 - Apr 2026</span></p>
+   CRITICAL: a float-right span must contain PLAIN TEXT ONLY — never <a> links or any other tag inside it (they break the line). Left-side text outside the span may contain links as usual.
+7. Allowed tags only: h1 h2 h3 h4 p ul ol li table thead tbody tr th td strong em u s a br hr blockquote span mark img (img exclusively as a pdf:N placeholder when instructed below).
+8. Be compact: no empty paragraphs, no decorative separator lines, no redundant whitespace elements.
+9. Output ONLY the raw HTML body content — no markdown fences, no <html>/<head>/<body> wrapper, no commentary.`;
+
+// Uses Gemini's native PDF understanding to import with structure, links, and
+// inline formatting intact. `links` are the URLs from the PDF's link
+// annotations — the model can't see those itself, only the visible text.
+// Returns null when unavailable so the caller can fall back to text extraction.
+export async function pdfToStructuredHtml(buffer, links = [], images = []) {
+  if (process.env.MOCK_AI === "1" || !process.env.GEMINI_API_KEY) return null;
+  if (buffer.length > 12 * 1024 * 1024) return null; // very large PDFs → text fallback
+
+  let prompt = PDF_CONVERT_PROMPT;
+  if (links.length) {
+    prompt += `\n\nThe PDF's link annotations contain these URLs — attach each to the text it belongs to (e.g. a "GitHub" label links to the github.com URL, a project name to its repository). Never invent URLs; leave text unlinked if no URL matches:\n${links
+      .slice(0, 50)
+      .map((u) => `- ${u}`)
+      .join("\n")}`;
+  }
+  if (images.length) {
+    prompt += `\n\nThe PDF contains these embedded images. Where each one appears in the document, insert exactly <img src="pdf:N" /> at that position (its real data is substituted later):\n${images
+      .map((im) => `- pdf:${im.index} — page ${im.page}, ${im.width}×${im.height}px`)
+      .join("\n")}\nOnly reference these pdf:N ids. Never write any other <img> tag or invent image URLs. Omit purely decorative page backgrounds. IMPORTANT: if an image is the scan of the page's own text content (a scanned/photographed document rather than a distinct logo, photo, chart, or figure), omit its placeholder entirely — transcribe the text instead, never both.`;
+  } else {
+    prompt += `\n\nDo not emit any <img> tags — image data is not available for this document.`;
+  }
+
+  const { GoogleGenAI } = await import("@google/genai");
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+  const call = (config) =>
+    ai.models.generateContent({
+      model: MODEL_ID,
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "application/pdf", data: buffer.toString("base64") } },
+          { text: prompt },
+        ],
+      }],
+      config,
+    });
+
+  let response;
+  try {
+    // Conversion doesn't need reasoning — skipping it cuts the wait massively.
+    response = await call({ temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } });
+  } catch (firstErr) {
+    if (isQuotaError(firstErr)) throw quotaError();
+    try {
+      response = await call({ temperature: 0.1 });
+    } catch (err) {
+      if (isQuotaError(err)) throw quotaError();
+      console.warn("[superdocs] Gemini PDF conversion failed, using text fallback:", err.message);
+      return null;
+    }
+  }
+
+  let html = (response.text || "").trim();
+  html = html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/, "").trim();
+  if (!/^<[a-z]/i.test(html)) return null;
+  return html;
 }
 
 /* --------------------------------- Mock ---------------------------------- */
@@ -247,6 +340,7 @@ export async function runAssistant({
         },
       });
     } catch (err) {
+      if (isQuotaError(err)) throw quotaError();
       if (/not[_ ]?found|does not exist|404/i.test(String(err?.message))) {
         throw new Error(
           `Model "${MODEL_ID}" isn't available for your API key. Set GEMINI_MODEL in .env.local to a model you can use.`

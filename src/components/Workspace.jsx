@@ -2,6 +2,7 @@
 
 import { MessageSquare, FileText, TriangleAlert } from "lucide-react";
 import { WorkspaceProvider, useWorkspace } from "./workspace-context";
+import PrintSheet from "./PrintSheet";
 import Header from "./shell/Header";
 import IconRail from "./shell/IconRail";
 import NavDrawer from "./shell/NavDrawer";
@@ -52,7 +53,7 @@ function Toast() {
 function Shell() {
   const ws = useWorkspace();
   return (
-    <div className="flex h-dvh flex-col bg-cream">
+    <div className="app-root flex h-dvh flex-col bg-cream">
       <Header />
       <div className="flex min-h-0 flex-1">
         <IconRail />
@@ -89,6 +90,7 @@ export default function Workspace({ user }) {
   return (
     <WorkspaceProvider user={user}>
       <Shell />
+      <PrintSheet />
     </WorkspaceProvider>
   );
 }

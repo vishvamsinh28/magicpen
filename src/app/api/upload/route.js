@@ -24,11 +24,23 @@ export async function POST(request) {
     parsed = await parseFileToHtml({ buffer, filename: file.name });
   } catch (err) {
     console.error("[superdocs] parse failed:", err);
-    const message =
-      err.code === "unsupported_type"
-        ? err.message
-        : `Couldn't read "${file.name}". The file may be corrupted or password-protected.`;
-    return Response.json({ error: { message } }, { status: 415 });
+    if (err.code === "ai_quota") {
+      return Response.json({ error: { message: err.message, code: err.code } }, { status: 429 });
+    }
+    if (err.code === "empty_pdf" || err.code === "unsupported_type") {
+      return Response.json({ error: { message: err.message, code: err.code } }, { status: 422 });
+    }
+    return Response.json(
+      { error: { message: `Couldn't read "${file.name}". The file may be corrupted or password-protected.` } },
+      { status: 415 }
+    );
+  }
+
+  if (!parsed.html.replace(/<[^>]+>/g, "").trim() && !/<img /.test(parsed.html)) {
+    return Response.json(
+      { error: { message: "No content could be extracted from this file." } },
+      { status: 422 }
+    );
   }
 
   let document = await Documents.create({

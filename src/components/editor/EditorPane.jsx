@@ -109,7 +109,7 @@ export default function EditorPane() {
             className={`px-3 py-6 md:px-10 md:py-9 ${showDropzone ? "sd-hide-placeholder" : ""}`}
           >
             <div
-              className="print-page doc-editor mx-auto w-[850px] max-w-full cursor-text rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px]"
+              className="doc-editor mx-auto w-[850px] max-w-full cursor-text rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px]"
               onClick={(e) => {
                 if (e.target === e.currentTarget) editor?.commands.focus("end");
               }}

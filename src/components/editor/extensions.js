@@ -1,6 +1,6 @@
 "use client";
 
-import { Extension } from "@tiptap/core";
+import { Extension, Mark } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, Color, FontSize } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
@@ -25,6 +25,15 @@ const BlockSpacing = Extension.create({
             parseHTML: (element) => element.style.lineHeight || null,
             renderHTML: (attributes) =>
               attributes.lineHeight ? { style: `line-height: ${attributes.lineHeight}` } : {},
+          },
+          // Whole-block text color ("make the letter blue") — without this the
+          // schema strips style="color: …" from <p>/<h*> and AI color edits
+          // apply invisibly.
+          color: {
+            default: null,
+            parseHTML: (element) => element.style.color || null,
+            renderHTML: (attributes) =>
+              attributes.color ? { style: `color: ${attributes.color}` } : {},
           },
         },
       },
@@ -51,15 +60,36 @@ const BlockSpacing = Extension.create({
   },
 });
 
+// A right-floated inline span — "HackerRank <span float:right>Bangalore</span>"
+// puts the location flush right on the same line, like resume/letterhead rows.
+// Without this mark the editor schema would strip those spans on load.
+const TailSpan = Mark.create({
+  name: "tailSpan",
+
+  parseHTML() {
+    return [{
+      tag: "span",
+      getAttrs: (element) => (element.style?.float === "right" ? {} : false),
+    }];
+  },
+
+  renderHTML() {
+    return ["span", { style: "float: right" }, 0];
+  },
+});
+
 export function createExtensions() {
   return [
     StarterKit.configure({
-      link: { openOnClick: false, autolink: true },
+      // autolink would re-linkify plain-text emails/URLs inside float-right
+      // tail spans, splitting them into separate floats that wrap badly.
+      link: { openOnClick: false, autolink: false },
     }),
     TextStyle,
     Color,
     FontSize,
     BlockSpacing,
+    TailSpan,
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     Image.configure({ allowBase64: true }),

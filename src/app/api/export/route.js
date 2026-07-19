@@ -3,6 +3,16 @@ import { getUserFromRequest, unauthorized } from "@/lib/auth";
 
 const DOC_STYLES = `body{font-family:'Segoe UI',Arial,sans-serif;font-size:11pt;line-height:1.5;color:#1f1e1b}h1{font-size:20pt}h2{font-size:15pt}h3{font-size:12.5pt}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:6px 8px;text-align:left;vertical-align:top}mark{background-color:#fef08a}`;
 
+// Word/Markdown/Text can't express right-floated tail spans — turn
+// "Company<span float:right>Location</span>" into "Company — Location"
+// so the pair doesn't end up glued together.
+function flattenTailSpans(html) {
+  return html.replace(
+    /<span[^>]*style="[^"]*float:\s*right[^"]*"[^>]*>([\s\S]*?)<\/span>/gi,
+    (_, inner) => ` — ${inner}`
+  );
+}
+
 function safeFilename(title, ext) {
   const base = (title || "document").replace(/[\\/:*?"<>|]+/g, "").trim() || "document";
   return `${base.slice(0, 80)}.${ext}`;
@@ -32,7 +42,7 @@ export async function POST(request) {
   try {
     if (format === "docx") {
       const { default: htmlToDocx } = await import("html-to-docx");
-      const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${DOC_STYLES}</style></head><body>${html}</body></html>`;
+      const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${DOC_STYLES}</style></head><body>${flattenTailSpans(html)}</body></html>`;
       const buffer = await htmlToDocx(fullHtml, null, {
         title,
         font: "Calibri",
@@ -47,7 +57,7 @@ export async function POST(request) {
     if (format === "md") {
       const { default: TurndownService } = await import("turndown");
       const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
-      const md = turndown.turndown(html);
+      const md = turndown.turndown(flattenTailSpans(html));
       return fileResponse(md, { filename: safeFilename(title, "md"), type: "text/markdown; charset=utf-8" });
     }
 
@@ -57,7 +67,7 @@ export async function POST(request) {
     }
 
     if (format === "txt") {
-      return fileResponse(htmlToText(html), { filename: safeFilename(title, "txt"), type: "text/plain; charset=utf-8" });
+      return fileResponse(htmlToText(flattenTailSpans(html)), { filename: safeFilename(title, "txt"), type: "text/plain; charset=utf-8" });
     }
 
     return Response.json({ error: { message: `Unknown format "${format}"` } }, { status: 400 });

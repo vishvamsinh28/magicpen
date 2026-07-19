@@ -47,6 +47,7 @@ export function WorkspaceProvider({ user, children }) {
   const [infoModal, setInfoModal] = useState(null); // 'upgrade'|'getstarted'|'docs'|'bug'|'settings'|'profile'
   const [toast, setToast] = useState(null);
   const [changesVersion, setChangesVersion] = useState(0);
+  const [printHtml, setPrintHtml] = useState(null); // non-null while printing
 
   const toastTimerRef = useRef(null);
   const showToast = (message, type = "error") => {
@@ -502,7 +503,8 @@ export function WorkspaceProvider({ user, children }) {
     const docId = activeDocId;
     if (!docId) return;
     if (format === "pdf") {
-      window.print();
+      // Rendered by PrintSheet, which triggers window.print() once mounted.
+      setPrintHtml(editorApiRef.current?.getHTML() ?? docHtmlRef.current.get(docId) ?? "");
       return;
     }
     const activeDoc = openDocs.find((d) => d.id === docId);
@@ -538,8 +540,8 @@ export function WorkspaceProvider({ user, children }) {
     sendMessage, approvePendingChange, rejectPendingChange, newConversation, loadChat, deleteChat,
     // changes
     changesVersion, restoreChange, applyEdits,
-    // export
-    downloadDocument,
+    // export & print
+    downloadDocument, printHtml, setPrintHtml,
     // settings & ui
     settings, setSettings,
     leftView, setLeftView, mobilePane, setMobilePane,
