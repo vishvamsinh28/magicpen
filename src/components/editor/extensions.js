@@ -18,7 +18,7 @@ const BlockSpacing = Extension.create({
   addGlobalAttributes() {
     return [
       {
-        types: ["paragraph", "heading"],
+        types: ["paragraph", "heading", "listItem", "bulletList", "orderedList", "blockquote"],
         attributes: {
           lineHeight: {
             default: null,
@@ -48,8 +48,9 @@ const BlockSpacing = Extension.create({
           const { from, to, empty } = state.selection;
           const start = empty ? 0 : from;
           const end = empty ? state.doc.content.size : to;
+          const SPACEABLE = new Set(["paragraph", "heading", "listItem"]);
           state.doc.nodesBetween(start, end, (node, pos) => {
-            if (node.type.name === "paragraph" || node.type.name === "heading") {
+            if (SPACEABLE.has(node.type.name)) {
               tr.setNodeMarkup(pos, undefined, { ...node.attrs, lineHeight: value });
             }
           });

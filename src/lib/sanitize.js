@@ -10,6 +10,12 @@ const STYLE_PROPS = {
   "line-height": [/^\d+(\.\d+)?$/],
   "text-align": [/^(left|right|center|justify)$/],
   "font-family": [/^[\w\s,'"-]+$/],
+  // The editor's Bold/Italic/Underline/Strike marks parse these style forms
+  // (the AI often styles whole blocks instead of using tags).
+  "font-weight": [/^(normal|bold|bolder|[1-9]00)$/],
+  "font-style": [/^(normal|italic)$/],
+  "text-decoration": [/^(none|underline|line-through|underline line-through|line-through underline)$/],
+  "text-decoration-line": [/^(none|underline|line-through|underline line-through|line-through underline)$/],
   // right-aligned tail on the same line (resume-style "company ↔ location" rows)
   float: [/^right$/],
 };

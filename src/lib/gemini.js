@@ -38,7 +38,7 @@ Rules:
 1. Edit only what the user asked for. Preserve every other block exactly — never use setDocument for a local change.
 2. Inside blocks you edit, keep existing formatting (bold, links, colors, alignment) unless the user asks to change it.
 3. Allowed tags: h1-h6, p, ul, ol, li, blockquote, pre, code, table, thead, tbody, tr, th, td, img, a, strong, em, u, s, span, mark, br, hr.
-4. Styling goes in inline styles: color, background-color, font-size (e.g. "18px"), line-height (e.g. "1.5"), text-align. To color a whole block, put the style on the block element itself — <p style="color:#1d4ed8">…</p> or <h2 style="color:#1d4ed8">…</h2>; for part of a line use <span style="color:…">. To highlight text use <mark style="background-color:#fef08a">…</mark> (pick a fitting color). <span style="float: right">…</span> puts text flush right on the same line (used for location/date columns) — preserve such spans when editing blocks that contain them.
+4. Styling goes in inline styles: color, background-color, font-size (e.g. "18px"), line-height (e.g. "1.5"), text-align. To color a whole block, put the style on the block element itself — works on <p>, <h1>-<h6>, <ul>, <ol>, <li>, and <blockquote> (e.g. <p style="color:#1d4ed8">…</p>, <ul style="color:#1d4ed8">…</ul>); for part of a line use <span style="color:…">. For bold/italic/underline/strikethrough ALWAYS prefer the tags <strong>, <em>, <u>, <s> wrapped around the text (block-level font-weight/font-style/text-decoration styles also work, but tags are more reliable). To highlight text use <mark style="background-color:#fef08a">…</mark> (pick a fitting color). <span style="float: right">…</span> puts text flush right on the same line (used for location/date columns) — preserve such spans when editing blocks that contain them.
 5. To translate or rewrite the whole document, prefer one replace op per block so structure stays aligned.
 6. When the document is empty and the user asks to create, write, draft, or load a template, produce a complete well-structured document with setDocument and set "title".
 7. Questions about the document get "edits": [] and the answer in "reply".
@@ -157,7 +157,7 @@ Requirements:
 // inline formatting intact. `links` are the URLs from the PDF's link
 // annotations — the model can't see those itself, only the visible text.
 // Returns null when unavailable so the caller can fall back to text extraction.
-export async function pdfToStructuredHtml(buffer, links = [], images = []) {
+export async function pdfToStructuredHtml(buffer, links = [], { placeholders = [], scanPages = [] } = {}) {
   if (process.env.MOCK_AI === "1" || !process.env.GEMINI_API_KEY) return null;
   if (buffer.length > 12 * 1024 * 1024) return null; // very large PDFs → text fallback
 
@@ -168,10 +168,12 @@ export async function pdfToStructuredHtml(buffer, links = [], images = []) {
       .map((u) => `- ${u}`)
       .join("\n")}`;
   }
-  if (images.length) {
-    prompt += `\n\nThe PDF contains these embedded images. Where each one appears in the document, insert exactly <img src="pdf:N" /> at that position (its real data is substituted later):\n${images
+  if (placeholders.length) {
+    prompt += `\n\nThe PDF contains these embedded images. Where each one appears in the document, insert exactly <img src="pdf:N" /> at that position (its real data is substituted later):\n${placeholders
       .map((im) => `- pdf:${im.index} — page ${im.page}, ${im.width}×${im.height}px`)
       .join("\n")}\nOnly reference these pdf:N ids. Never write any other <img> tag or invent image URLs. Omit purely decorative page backgrounds. IMPORTANT: if an image is the scan of the page's own text content (a scanned/photographed document rather than a distinct logo, photo, chart, or figure), omit its placeholder entirely — transcribe the text instead, never both.`;
+  } else if (scanPages.length) {
+    prompt += `\n\nThis document is a SCAN (no text layer). Transcribe all of its text into the HTML structure as instructed. Additionally, if a scanned page contains a distinct graphic element — a logo, signature, stamp, photo, or chart (NEVER a region of ordinary text) — insert exactly <img src="scan:P:ymin,xmin,ymax,xmax" /> at the position where it appears in the document flow. P is the page number (available scanned pages: ${scanPages.join(", ")}); ymin,xmin,ymax,xmax are integers 0–1000 normalized to that page, top-left origin. Include a small margin around the graphic so nothing is clipped. Example — a logo in the top-left of page 1 spanning 4%–14% of the height and 5%–30% of the width: <img src="scan:1:35,45,145,310" />. Emit no img tags if there are no such graphics.`;
   } else {
     prompt += `\n\nDo not emit any <img> tags — image data is not available for this document.`;
   }
