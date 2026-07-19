@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquare, Search, X, Trash2, Loader2, Waypoints } from "lucide-react";
+import { MessageSquare, Search, X, Check, Trash2, Loader2, Waypoints } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiFetch, timeAgo } from "@/lib/client-utils";
@@ -12,11 +12,16 @@ export default function ChatHistoryDrawer() {
   const [query, setQuery] = useState("");
   const [confirmChat, setConfirmChat] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [confirmBatch, setConfirmBatch] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   useEffect(() => {
     if (!ws.historyOpen) return;
     setChats(null);
     setQuery("");
+    setSelected(new Set());
+    setConfirmBatch(false);
     apiFetch("/api/chats")
       .then((data) => setChats(data.chats))
       .catch((e) => {
@@ -31,6 +36,30 @@ export default function ChatHistoryDrawer() {
   const filtered = (chats || []).filter((c) =>
     c.title.toLowerCase().includes(query.toLowerCase().trim())
   );
+
+  const toggleSelect = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const removeSelected = async () => {
+    if (batchDeleting || selected.size === 0) return;
+    setBatchDeleting(true);
+    const ids = [...selected];
+    const results = await Promise.all(ids.map((id) => ws.deleteChat(id)));
+    const gone = new Set(ids.filter((_, i) => results[i]));
+    setBatchDeleting(false);
+    setConfirmBatch(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of gone) next.delete(id);
+      return next;
+    });
+    if (gone.size) setChats((prev) => prev?.filter((c) => !gone.has(c.id)));
+  };
 
   const remove = async () => {
     const chat = confirmChat;
@@ -73,6 +102,32 @@ export default function ChatHistoryDrawer() {
           </div>
         </div>
 
+        {selected.size > 0 && (
+          <div className="flex items-center gap-1.5 border-b border-line/70 px-4 pb-3">
+            <span className="text-[13px] font-semibold text-ink">{selected.size} selected</span>
+            <button
+              onClick={() => setSelected(new Set(filtered.map((c) => c.id)))}
+              className="rounded-md px-2 py-1 text-[12px] font-medium text-ink-soft transition-colors hover:bg-paper"
+            >
+              Select all
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={() => setSelected(new Set())}
+              className="rounded-lg border-[1.5px] border-frame bg-paper px-2.5 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-cream"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => setConfirmBatch(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-2.5 py-1.5 text-[12.5px] font-semibold text-white shadow-card transition-colors hover:bg-red-700"
+            >
+              <Trash2 size={12} />
+              Delete
+            </button>
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 overflow-y-auto pb-6">
           {chats === null && (
             <p className="flex items-center gap-2 px-5 py-4 text-[13px] text-muted">
@@ -87,15 +142,35 @@ export default function ChatHistoryDrawer() {
           {filtered.map((chat) => (
             <div
               key={chat.id}
-              onClick={() => ws.loadChat(chat.id)}
+              onClick={() => (selected.size > 0 ? toggleSelect(chat.id) : ws.loadChat(chat.id))}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && ws.loadChat(chat.id)}
-              className={`group flex cursor-pointer items-start justify-between gap-2 border-b border-line/70 px-5 py-3.5 transition-colors ${
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                (selected.size > 0 ? toggleSelect(chat.id) : ws.loadChat(chat.id))
+              }
+              className={`group flex cursor-pointer items-start gap-2.5 border-b border-line/70 px-5 py-3.5 transition-colors ${
                 chat.id === ws.chatId ? "bg-accent-soft" : "hover:bg-paper"
               }`}
             >
-              <div className="min-w-0">
+              <button
+                aria-label={selected.has(chat.id) ? `Deselect chat ${chat.title}` : `Select chat ${chat.title}`}
+                aria-pressed={selected.has(chat.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSelect(chat.id);
+                }}
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-[1.5px] transition-opacity ${
+                  selected.has(chat.id)
+                    ? "border-accent bg-accent text-white"
+                    : `border-frame bg-paper text-transparent hover:text-muted ${
+                        selected.size > 0 ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                      }`
+                }`}
+              >
+                <Check size={12} strokeWidth={3} />
+              </button>
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-[14.5px] font-medium text-ink">{chat.title}</p>
                 <p className="mt-1 flex items-center gap-1.5 text-[12px] text-muted">
                   {chat.scope === "cross" && <Waypoints size={11} />}
@@ -124,6 +199,15 @@ export default function ChatHistoryDrawer() {
         busy={deleting}
         onConfirm={remove}
         onCancel={() => setConfirmChat(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmBatch}
+        title={`Delete ${selected.size} ${selected.size === 1 ? "chat" : "chats"}?`}
+        message="Their messages will be gone for good."
+        busy={batchDeleting}
+        onConfirm={removeSelected}
+        onCancel={() => setConfirmBatch(false)}
       />
     </div>
   );

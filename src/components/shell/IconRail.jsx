@@ -6,13 +6,26 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 
+// Styled hover tooltip to the right of the icon (shows on keyboard focus
+// too). Slight show delay so sweeping the cursor down the rail doesn't
+// flash every label; hiding is immediate.
+function RailTooltip({ label }) {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute left-full top-1/2 z-50 ml-2.5 -translate-y-1/2 whitespace-nowrap rounded-md bg-ink px-2.5 py-1.5 text-[12px] font-semibold text-white opacity-0 shadow-pop transition-opacity group-hover:opacity-100 group-hover:delay-150 group-focus-visible:opacity-100"
+    >
+      {label}
+    </span>
+  );
+}
+
 function RailButton({ label, onClick, children, accent = false, active = false }) {
   return (
     <button
       onClick={onClick}
-      title={label}
       aria-label={label}
-      className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+      className={`group relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
         accent
           ? "text-accent hover:bg-accent-soft"
           : active
@@ -21,6 +34,7 @@ function RailButton({ label, onClick, children, accent = false, active = false }
       }`}
     >
       {children}
+      <RailTooltip label={label} />
     </button>
   );
 }
@@ -36,11 +50,11 @@ export default function IconRail() {
 
       <button
         onClick={ws.newConversation}
-        title="New chat"
         aria-label="New chat"
-        className="mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white shadow-card transition-colors hover:bg-accent-deep"
+        className="group relative mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white shadow-card transition-colors hover:bg-accent-deep"
       >
         <Plus size={19} strokeWidth={2.4} />
+        <RailTooltip label="New chat" />
       </button>
 
       <div className="mt-1 flex flex-col gap-1.5">
