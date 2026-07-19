@@ -68,10 +68,30 @@ function extractBody(html) {
   return match ? match[1] : String(html);
 }
 
+// Word's fixed highlight palette → hex, so highlighter marks survive import
+// (mammoth drops highlights unless mapped explicitly).
+const WORD_HIGHLIGHTS = {
+  yellow: "#ffff00", green: "#00ff00", cyan: "#00ffff", magenta: "#ff00ff",
+  blue: "#0000ff", red: "#ff0000", darkBlue: "#00008b", darkCyan: "#008b8b",
+  darkGreen: "#006400", darkMagenta: "#800080", darkRed: "#8b0000",
+  darkYellow: "#808000", darkGray: "#a9a9a9", lightGray: "#d3d3d3",
+  black: "#000000", white: "#ffffff",
+};
+
 async function parseDocx(buffer) {
   const { default: mammoth } = await import("mammoth");
-  const result = await mammoth.convertToHtml({ buffer });
-  return result.value;
+  const styleMap = [
+    ...Object.keys(WORD_HIGHLIGHTS).map(
+      (color) => `highlight[color='${color}'] => mark.hl-${color}`
+    ),
+    "highlight => mark.hl-yellow",
+  ];
+  const result = await mammoth.convertToHtml({ buffer }, { styleMap });
+  // Classes don't survive sanitization — turn them into inline styles now.
+  return result.value.replace(/<mark class="hl-(\w+)">/g, (match, color) => {
+    const hex = WORD_HIGHLIGHTS[color] || WORD_HIGHLIGHTS.yellow;
+    return `<mark style="background-color:${hex}">`;
+  });
 }
 
 const MAX_PDF_IMAGES = 8;
@@ -139,6 +159,38 @@ function encodeRasterRegion(raster, PNG, box = null, maxDim = 1000) {
   return dataUri.length > MAX_IMAGE_DATA_URI ? null : dataUri;
 }
 
+// Text under an annotation rectangle. Items that start before the rect but
+// overlap it (mid-line links/highlights) contribute a substring sliced by
+// average character width — approximate, but reliable for one-line runs.
+function textInRect(textContent, rect) {
+  const [x1, y1, x2, y2] = rect;
+  const parts = [];
+  for (const item of textContent.items) {
+    const tx = item.transform?.[4];
+    const ty = item.transform?.[5];
+    if (tx == null || !item.str) continue;
+    if (ty < y1 - 3 || ty > y2 + 3) continue; // baseline outside vertically
+    const width = item.width || 0;
+    const endX = tx + width;
+    if (endX < x1 - 2 || tx > x2 + 2) continue; // no horizontal overlap
+    if (tx >= x1 - 2 && endX <= x2 + 2) {
+      parts.push(item.str); // fully inside
+    } else if (width > 0 && item.str.length > 1) {
+      // Proportional slice, then snap outward to word boundaries — average
+      // char width is off by a glyph or two on mixed-width text.
+      const charWidth = width / item.str.length;
+      let from = Math.max(0, Math.round((x1 - tx) / charWidth));
+      let to = Math.min(item.str.length, Math.round((x2 - tx) / charWidth));
+      while (from > 0 && item.str[from - 1] !== " ") from--;
+      while (to < item.str.length && item.str[to] !== " ") to++;
+      if (to > from) parts.push(item.str.slice(from, to));
+    } else {
+      parts.push(item.str);
+    }
+  }
+  return parts.join("").replace(/\s+/g, " ").trim();
+}
+
 // Pair each link annotation's URL with the text under its rectangle, so links
 // can be re-attached deterministically even if the model forgets them.
 async function extractLinkAnchors(pdf) {
@@ -150,15 +202,7 @@ async function extractLinkAnchors(pdf) {
       if (!linkAnnots.length) continue;
       const textContent = await page.getTextContent();
       for (const annot of linkAnnots) {
-        const [x1, y1, x2, y2] = annot.rect;
-        const parts = [];
-        for (const item of textContent.items) {
-          const tx = item.transform?.[4];
-          const ty = item.transform?.[5];
-          if (tx == null) continue;
-          if (tx >= x1 - 2 && tx <= x2 + 2 && ty >= y1 - 3 && ty <= y2 + 3) parts.push(item.str);
-        }
-        const text = parts.join("").replace(/\s+/g, " ").trim();
+        const text = textInRect(textContent, annot.rect);
         anchors.push({ url: annot.url, text: text.length >= 3 && text.length <= 120 ? text : null });
       }
     }
@@ -166,26 +210,91 @@ async function extractLinkAnchors(pdf) {
   return anchors;
 }
 
-// Wrap any anchor text whose URL the model failed to attach. Existing links
-// and float-right tail spans (plain-text by design) are left untouched.
-function ensureLinks(html, anchors) {
+// Highlight / Underline / StrikeOut annotations (someone marked up the PDF in
+// a reader) → the corresponding editor formatting, with the annotation color.
+async function extractMarkupAnnotations(pdf) {
+  const markups = [];
+  const SUBTYPES = { Highlight: "mark", Underline: "u", StrikeOut: "s" };
+  try {
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const annots = (await page.getAnnotations()).filter((a) => SUBTYPES[a.subtype] && a.rect);
+      if (!annots.length) continue;
+      const textContent = await page.getTextContent();
+      for (const annot of annots) {
+        const text = textInRect(textContent, annot.rect);
+        if (text.length < 2 || text.length > 200) continue;
+        const color =
+          annot.color?.length >= 3
+            ? `#${[...annot.color].slice(0, 3).map((c) => Math.round(c).toString(16).padStart(2, "0")).join("")}`
+            : "#ffff00";
+        markups.push({ kind: SUBTYPES[annot.subtype], text, color });
+      }
+    }
+  } catch {}
+  return markups;
+}
+
+// Wrap the first plain-text occurrence of `text` with open/close tags,
+// skipping regions that are already links, marks, u/s runs, or float tails.
+const PROTECTED_SEGMENTS =
+  /(<a [\s\S]*?<\/a>|<mark[\s\S]*?<\/mark>|<u>[\s\S]*?<\/u>|<s>[\s\S]*?<\/s>|<span[^>]*float:\s*right[^>]*>[\s\S]*?<\/span>)/gi;
+
+// Returns the wrapped html, or null when the text wasn't found in plain form.
+function wrapPlainText(html, text, open, close) {
   const isInsideTag = (segment, index) =>
     segment.lastIndexOf("<", index) > segment.lastIndexOf(">", index);
 
+  const segments = html.split(PROTECTED_SEGMENTS);
+  for (let i = 0; i < segments.length; i += 2) {
+    const idx = segments[i].indexOf(text);
+    if (idx === -1 || isInsideTag(segments[i], idx)) continue;
+    segments[i] =
+      segments[i].slice(0, idx) + open + text + close + segments[i].slice(idx + text.length);
+    return segments.join("");
+  }
+  return null;
+}
+
+// The exact annotation text may cross tags the model added ("<strong>WORD</strong> next"),
+// so retry with edge words dropped before giving up.
+function wrapWithFallbacks(html, text, open, close) {
+  const words = text.split(" ");
+  const candidates = [text];
+  if (words.length > 1) {
+    candidates.push(words.slice(0, -1).join(" "), words.slice(1).join(" "));
+    if (words.length > 2) candidates.push(words.slice(1, -1).join(" "));
+  }
+  for (const candidate of candidates) {
+    if (candidate.length < 3) continue;
+    const wrapped = wrapPlainText(html, candidate, open, close);
+    if (wrapped) return wrapped;
+  }
+  return html;
+}
+
+// Wrap any anchor text whose URL the model failed to attach.
+function ensureLinks(html, anchors) {
   for (const { url, text } of anchors) {
     if (!text || html.includes(`href="${url}"`)) continue;
-    const segments = html.split(/(<a [\s\S]*?<\/a>|<span[^>]*float:\s*right[^>]*>[\s\S]*?<\/span>)/gi);
-    for (let i = 0; i < segments.length; i += 2) {
-      const idx = segments[i].indexOf(text);
-      if (idx === -1 || isInsideTag(segments[i], idx)) continue;
-      const safeUrl = url.replace(/"/g, "%22");
-      segments[i] =
-        segments[i].slice(0, idx) +
-        `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${text}</a>` +
-        segments[i].slice(idx + text.length);
-      html = segments.join("");
-      break;
-    }
+    const safeUrl = url.replace(/"/g, "%22");
+    html = wrapWithFallbacks(
+      html,
+      text,
+      `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">`,
+      "</a>"
+    );
+  }
+  return html;
+}
+
+// Apply Highlight/Underline/StrikeOut annotations the model didn't reproduce.
+function ensureMarkup(html, markups) {
+  for (const { kind, text, color } of markups) {
+    const open =
+      kind === "mark" ? `<mark style="background-color:${color}">` : `<${kind}>`;
+    const close = kind === "mark" ? "</mark>" : `</${kind}>`;
+    html = wrapWithFallbacks(html, text, open, close);
   }
   return html;
 }
@@ -198,6 +307,7 @@ async function parsePdf(buffer) {
   // view of the page) can't see — collect them for the conversion prompt.
   const anchors = await extractLinkAnchors(pdf);
   const links = [...new Set(anchors.map((a) => a.url))];
+  const markups = await extractMarkupAnnotations(pdf);
 
   // Probe the text layer first: a PDF with none is a scan, where the only
   // "image" is the page itself — inserting it whole would duplicate the
@@ -259,8 +369,10 @@ async function parsePdf(buffer) {
     );
     // Drop anything else the model may have invented (hallucinated srcs render broken).
     html = html.replace(/<img(?![^>]*src="data:)[^>]*\/?>/gi, "");
-    // Guarantee every PDF hyperlink survives, whatever the model did with them.
+    // Guarantee every PDF hyperlink and markup annotation survives, whatever
+    // the model did with them.
     html = ensureLinks(html, anchors);
+    html = ensureMarkup(html, markups);
     return html;
   }
 

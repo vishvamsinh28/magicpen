@@ -139,7 +139,7 @@ const PDF_CONVERT_PROMPT = `Convert this PDF document into clean, semantic HTML 
 Requirements:
 1. Preserve ALL text exactly as written — never summarize, rephrase, reorder, add, or omit anything.
 2. Use the correct structure: h1 for the document title, h2/h3 for section headings, p for paragraphs, ul/ol + li for bullet and numbered lists, table/tr/th/td for tabular data.
-3. Preserve inline formatting: <strong> for bold, <em> for italics, <u> for underline.
+3. Preserve inline formatting: <strong> for bold, <em> for italics, <u> for underline, <s> for strikethrough. If text is visibly highlighted with a background color (a marker/highlighter effect), wrap it in <mark style="background-color:#RRGGBB"> using a hex close to the visible color (e.g. #ffff00 yellow, #00ffff cyan, #00ff00 green).
 4. Preserve hyperlinks as <a href="...">text</a> — include every link, whether it appears as a URL or as linked text (check link annotations).
 5. For multi-column layouts, linearize into natural reading order.
 6. When a line pairs left-aligned text with right-aligned text, keep both in ONE element and wrap the right-hand part in <span style="float: right">…</span>. This applies to entry rows (company ↔ location, role or degree ↔ dates) AND to the document header: when contact details sit right-aligned opposite the name, pair each line exactly as printed. Example header where "Email" shares the name's line and "Mobile" shares the links' line:
