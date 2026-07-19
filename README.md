@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# SuperDocs
 
-## Getting Started
+AI-powered document editing. Upload a document (or create one from chat), tell the
+assistant what to change in plain English, and it edits **in place** — only the relevant
+blocks are touched, so headings, tables, links, and formatting survive.
 
-First, run the development server:
+Built with Next.js 16 (App Router), TipTap, Google Gemini (`gemini-3.5-flash`), and
+MongoDB. Auth is first-party (scrypt password hashing + JWT sessions); Supabase is used
+**only** for file storage.
+
+## Features
+
+- ✍️ **AI editing inside the document** — the model returns block-level edit operations
+  (replace / insert / delete), never a full regeneration
+- 🔐 **Accounts** — email/password auth with scrypt-hashed passwords stored in your DB
+  and JWT sessions in an httpOnly cookie; every document, chat, and change is private
+  to the signed-in user
+- 📄 **Import**: PDF, DOCX, TXT, RTF, Markdown, HTML (≤ 30 MB)
+- 📥 **Export**: Word (.docx), Markdown, HTML, plain text, or print-to-PDF
+- 📎 **Reference attachments** in chat for extra context
+- 📝 **Templates**: NDA, rent agreement, cover letter, meeting notes, proposal, invoice, resume
+- 🛡️ **Review Mode**: approve or dismiss proposed changes before they land
+- 🔄 **Changes history** per document with one-click restore
+- 💬 **Chat history**, multi-document tabs, zoom, mobile-responsive layout
+
+## Pages
+
+| Route | What it is |
+| --- | --- |
+| `/` | Landing page |
+| `/login` · `/register` | Email/password auth |
+| `/app` | The workspace — chat on the left, editor on the right |
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill in your values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 and create an account — registration works immediately,
+even with an empty `.env.local` (see fallbacks below).
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### Environment (`.env.example`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Purpose |
+| --- | --- |
+| `GEMINI_API_KEY` | Google Gemini key (aistudio.google.com/apikey) — powers the assistant |
+| `GEMINI_MODEL` | Optional — defaults to `gemini-3.5-flash`, the single model SuperDocs uses |
+| `AUTH_SECRET` | Signs session JWTs (`openssl rand -hex 32`). **Required in production**; auto-generated into `.data/auth-secret` in dev |
+| `MONGODB_URI`, `MONGODB_DB` | MongoDB connection — stores users, documents, chats, changes; **if unset, a local JSON store in `.data/` is used (dev only)** |
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Optional, storage only — archives original uploads in a private bucket, server-side |
+| `SUPABASE_STORAGE_BUCKET` | Bucket name (default `superdocs`, auto-created) |
+| `MOCK_AI=1` | Try the whole app with canned AI responses, no key needed |
 
-## Learn More
+Everything degrades gracefully: without MongoDB you get a JSON file store, without
+Supabase uploads simply aren't archived, and without a Gemini key the chat tells you
+exactly what's missing (or set `MOCK_AI=1`).
 
-To learn more about Next.js, take a look at the following resources:
+## How auth works
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Register/login** at `/register` and `/login` → `POST /api/auth/register|login`.
+- Passwords are hashed with Node's built-in **scrypt** (random salt, timing-safe
+  comparison) and stored on the user record in your database — no auth provider.
+- Sessions are **HS256 JWTs** (30 days) signed with `AUTH_SECRET` and delivered as an
+  `httpOnly; SameSite=Lax` cookie, so tokens never touch JavaScript or localStorage.
+- Every API route verifies the cookie and scopes queries by the token's user id.
+  `GET /api/auth/me` hydrates the client; `POST /api/auth/logout` clears the cookie.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Storage (Supabase, optional)
 
-## Deploy on Vercel
+Original uploads are archived to a **private** bucket at
+`<user id>/<document id>/<filename>`, purely server-side via the secret key
+(`sb_secret_...`). The key never reaches the browser and the bucket needs no RLS
+policies or public access. Skip the env vars and the app just doesn't archive.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## How AI editing works
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. The editor document is serialized into numbered top-level HTML blocks.
+2. Gemini receives the blocks + your request and returns JSON edit operations
+   (`replace`, `insertAfter`, `insertBefore`, `delete`, `setDocument`) plus a short reply.
+3. Operations are applied as a pure HTML transform — untouched blocks are preserved
+   byte-for-byte — then sanitized, saved, and recorded in the Changes history.
+
+## Scripts
+
+- `npm run dev` — development server (Turbopack)
+- `npm run build` / `npm start` — production build & serve
