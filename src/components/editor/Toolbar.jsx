@@ -157,37 +157,47 @@ export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
   const imageInputRef = useRef(null);
   const s = useEditorState({
     editor,
-    selector: ({ editor: ed }) =>
-      ed
-        ? {
-            bold: ed.isActive("bold"),
-            italic: ed.isActive("italic"),
-            underline: ed.isActive("underline"),
-            strike: ed.isActive("strike"),
-            fontFamily: ed.getAttributes("textStyle").fontFamily || null,
-            imageSelected: ed.isActive("image"),
-            imageWidth: ed.getAttributes("image").width || null,
-            fontSize: ed.getAttributes("textStyle").fontSize || null,
-            lineHeight:
-              ed.getAttributes("paragraph").lineHeight ||
-              ed.getAttributes("heading").lineHeight ||
-              null,
-            color: ed.getAttributes("textStyle").color || null,
-            highlight: ed.getAttributes("highlight").color || null,
-            inTable: ed.isActive("table"),
-            inTaskList: ed.isActive("taskList"),
-            inLink: ed.isActive("link"),
-            canUndo: ed.can().undo(),
-            canRedo: ed.can().redo(),
-            heading: ed.isActive("heading", { level: 1 })
-              ? 1
-              : ed.isActive("heading", { level: 2 })
-                ? 2
-                : ed.isActive("heading", { level: 3 })
-                  ? 3
-                  : 0,
-          }
-        : null,
+    selector: ({ editor: ed }) => {
+      if (!ed || ed.isDestroyed) return null;
+      // In collaborative documents undo/redo come from Yjs, and its plugin
+      // state isn't available on the very first transactions — asking too
+      // early throws, so probe defensively rather than crash the toolbar.
+      const probe = (fn) => {
+        try {
+          return fn();
+        } catch {
+          return false;
+        }
+      };
+      return {
+        bold: ed.isActive("bold"),
+        italic: ed.isActive("italic"),
+        underline: ed.isActive("underline"),
+        strike: ed.isActive("strike"),
+        fontFamily: ed.getAttributes("textStyle").fontFamily || null,
+        imageSelected: ed.isActive("image"),
+        imageWidth: ed.getAttributes("image").width || null,
+        fontSize: ed.getAttributes("textStyle").fontSize || null,
+        lineHeight:
+          ed.getAttributes("paragraph").lineHeight ||
+          ed.getAttributes("heading").lineHeight ||
+          null,
+        color: ed.getAttributes("textStyle").color || null,
+        highlight: ed.getAttributes("highlight").color || null,
+        inTable: ed.isActive("table"),
+        inTaskList: ed.isActive("taskList"),
+        inLink: ed.isActive("link"),
+        canUndo: probe(() => ed.can().undo()),
+        canRedo: probe(() => ed.can().redo()),
+        heading: ed.isActive("heading", { level: 1 })
+          ? 1
+          : ed.isActive("heading", { level: 2 })
+            ? 2
+            : ed.isActive("heading", { level: 3 })
+              ? 3
+              : 0,
+      };
+    },
   });
 
   const run = (fn) => () => editor && fn(editor.chain().focus()).run();
@@ -389,14 +399,14 @@ export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
           e.target.value = "";
           if (!file || !editor) return;
           if (file.size > 8 * 1024 * 1024) {
-            ws.showToast("Images up to 8 MB are supported.");
+            ws?.showToast?.("Images up to 8 MB are supported.");
             return;
           }
           try {
             const src = await fileToInsertableSrc(file);
             editor.chain().focus().setImage({ src, alt: file.name.replace(/\.[a-z0-9]+$/i, "") }).run();
           } catch (err) {
-            ws.showToast(err.message || "Couldn't insert that image.");
+            ws?.showToast?.(err.message || "Couldn't insert that image.");
           }
         }}
       />

@@ -9,8 +9,10 @@ import Image from "@tiptap/extension-image";
 import { TableKit } from "@tiptap/extension-table";
 import { TaskList, TaskItem } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
+import Collaboration from "@tiptap/extension-collaboration";
 import PageBreak from "./PageBreak";
 import { SearchHighlight } from "./search";
+import { CommentHighlights } from "./comments";
 
 // The toolbar's image-size options set a width attribute (a percentage), which
 // the sanitizer keeps — style-based widths would be stripped on save.
@@ -113,13 +115,19 @@ const TailSpan = Mark.create({
   },
 });
 
-export function createExtensions() {
+// `ydoc` is only passed for documents that are actually being collaborated on.
+// Without it the editor behaves exactly as it always has; with it, the document
+// state lives in the CRDT and Yjs supplies undo/redo (its history is per-user,
+// so undo never rolls back someone else's typing).
+export function createExtensions({ ydoc = null } = {}) {
   return [
     StarterKit.configure({
       // autolink would re-linkify plain-text emails/URLs inside float-right
       // tail spans, splitting them into separate floats that wrap badly.
       link: { openOnClick: false, autolink: false },
+      ...(ydoc ? { undoRedo: false } : {}),
     }),
+    ...(ydoc ? [Collaboration.configure({ document: ydoc })] : []),
     TextStyle,
     Color,
     FontSize,
@@ -136,6 +144,7 @@ export function createExtensions() {
     TaskItem.configure({ nested: true }),
     PageBreak,
     SearchHighlight,
+    CommentHighlights,
     Placeholder.configure({
       placeholder: "Start writing, paste content, or ask the assistant…",
       showOnlyWhenEditable: true,

@@ -1,5 +1,6 @@
 import { cleanDocHtml, htmlToText } from "@/lib/sanitize";
 import { getUserFromRequest, unauthorized } from "@/lib/auth";
+import { resolveAccess, forbidden } from "@/lib/access";
 
 const DOC_STYLES = `body{font-family:'Segoe UI',Arial,sans-serif;font-size:11pt;line-height:1.5;color:#1f1e1b}h1{font-size:20pt}h2{font-size:15pt}h3{font-size:12.5pt}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:6px 8px;text-align:left;vertical-align:top}mark{background-color:#fef08a}`;
 
@@ -28,11 +29,19 @@ function fileResponse(body, { filename, type }) {
 }
 
 export async function POST(request) {
-  const user = await getUserFromRequest(request);
-  if (!user) return unauthorized();
-
   const body = await request.json().catch(() => ({}));
-  const { title = "document", format = "docx" } = body;
+  const { title = "document", format = "docx", documentId = null } = body;
+
+  // Share visitors export through the same route, so downloads are gated by
+  // the link's own "allow download" setting rather than by having an account.
+  if (documentId) {
+    const access = await resolveAccess(request, documentId);
+    if (!access) return unauthorized();
+    if (!access.allowDownload) return forbidden("Downloads are turned off for this link");
+  } else if (!(await getUserFromRequest(request))) {
+    return unauthorized();
+  }
+
   const html = cleanDocHtml(body.html || "");
 
   if (!html) {

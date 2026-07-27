@@ -52,6 +52,14 @@ export function WorkspaceProvider({ user, children }) {
   const [changesVersion, setChangesVersion] = useState(0);
   const [printHtml, setPrintHtml] = useState(null); // non-null while printing
 
+  /* ----------------------------- collaboration ----------------------------- */
+  const [shareOpen, setShareOpen] = useState(false);
+  const [peers, setPeers] = useState([]);
+  // The live editor as state, not just a ref: panels that decorate the document
+  // (comments) must re-render when the editor is swapped out on a tab switch,
+  // otherwise they keep poking at a torn-down instance.
+  const [editorInstance, setEditorInstance] = useState(null);
+
   /* ------------------------------- versions -------------------------------- */
   // Manual commits (git-style). Nothing is snapshotted automatically.
   const [versionsVersion, setVersionsVersion] = useState(0); // bump to refresh the panel
@@ -84,7 +92,12 @@ export function WorkspaceProvider({ user, children }) {
           try {
             const { document } = await apiFetch(`/api/documents/${id}`);
             docHtmlRef.current.set(document.id, document.contentHtml || "");
-            restored.push({ id: document.id, title: document.title, sourceFile: document.sourceFile });
+            restored.push({
+              id: document.id,
+              title: document.title,
+              sourceFile: document.sourceFile,
+              shared: !!document.shared,
+            });
           } catch {}
         }
         if (restored.length) {
@@ -115,7 +128,17 @@ export function WorkspaceProvider({ user, children }) {
 
   /* ------------------------------ doc actions ----------------------------- */
 
-  const tabMeta = (doc) => ({ id: doc.id, title: doc.title, sourceFile: doc.sourceFile || null });
+  const tabMeta = (doc) => ({
+    id: doc.id,
+    title: doc.title,
+    sourceFile: doc.sourceFile || null,
+    shared: !!doc.shared,
+  });
+
+  // Flipping a document into (or out of) collaborative mode; the editor watches
+  // this to decide whether to bind to a CRDT.
+  const markDocumentShared = (docId, shared) =>
+    setOpenDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, shared } : d)));
 
   const addTab = (doc) =>
     setOpenDocs((prev) => (prev.some((d) => d.id === doc.id) ? prev : [...prev, tabMeta(doc)]));
@@ -707,6 +730,9 @@ export function WorkspaceProvider({ user, children }) {
     uploading, docsVersion, docHtmlRef, editorApiRef,
     openDocument, createBlankDocument, createDocumentFromTemplate, uploadFiles,
     closeDocument, renameDocument, deleteDocument, onEditorUpdate,
+    // collaboration
+    shareOpen, setShareOpen, markDocumentShared, peers, setPeers,
+    editorInstance, setEditorInstance,
     // chat
     chatId, chatTitle, messages, sending, scope, setScope, pendingChange,
     pendingDeselected, togglePendingEdit, setPendingSelectAll,

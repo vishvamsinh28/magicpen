@@ -10,7 +10,9 @@ import { SignJWT, jwtVerify } from "jose";
 const scrypt = promisify(scryptCb);
 
 export const SESSION_COOKIE = "superdocs_session";
+export const GUEST_COOKIE = "superdocs_guest";
 const SESSION_DAYS = 30;
+const GUEST_DAYS = 90;
 const SCRYPT_KEYLEN = 64;
 
 /* ------------------------------- passwords ------------------------------- */
@@ -76,13 +78,48 @@ export function clearSessionCookie() {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
-function readSessionCookie(request) {
+function readCookie(request, wanted) {
   const header = request.headers.get("cookie") || "";
   for (const part of header.split(";")) {
     const [name, ...rest] = part.trim().split("=");
-    if (name === SESSION_COOKIE) return rest.join("=") || null;
+    if (name === wanted) return rest.join("=") || null;
   }
   return null;
+}
+
+const readSessionCookie = (request) => readCookie(request, SESSION_COOKIE);
+
+/* ------------------------------- guest ids -------------------------------- */
+// People who open a share link have no account. They still need a stable
+// identity so their comments and presence are attributable, so they get a
+// signed guest token — same secret, but a distinct claim so a guest token can
+// never be mistaken for a session.
+
+export async function createGuestToken({ id, name }) {
+  return new SignJWT({ name: name || null, kind: "guest" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(id)
+    .setIssuer("superdocs")
+    .setIssuedAt()
+    .setExpirationTime(`${GUEST_DAYS}d`)
+    .sign(await getSecret());
+}
+
+export function guestCookie(token) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${GUEST_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${GUEST_DAYS * 86400}${secure}`;
+}
+
+export async function getGuestFromRequest(request) {
+  const token = readCookie(request, GUEST_COOKIE);
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, await getSecret(), { issuer: "superdocs" });
+    if (!payload.sub || payload.kind !== "guest") return null;
+    return { id: payload.sub, name: payload.name || null };
+  } catch {
+    return null;
+  }
 }
 
 // Returns { id, email, name } or null when the request has no valid session.

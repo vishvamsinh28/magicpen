@@ -11,6 +11,8 @@
     "@google/genai": "^2.12.0",
     "@iarna/rtf-to-html": "^1.1.0",
     "@supabase/supabase-js": "^2.110.7",
+    "@tiptap/extension-collaboration": "^3.28.0",
+    "@tiptap/extension-collaboration-caret": "^3.28.0",
     "@tiptap/extension-highlight": "^3.28.0",
     "@tiptap/extension-image": "^3.28.0",
     "@tiptap/extension-table": "^3.28.0",
@@ -33,7 +35,8 @@
     "react-dom": "19.2.4",
     "sanitize-html": "^2.17.6",
     "turndown": "^7.2.4",
-    "unpdf": "^1.6.2"
+    "unpdf": "^1.6.2",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

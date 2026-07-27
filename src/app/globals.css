@@ -288,6 +288,20 @@ body {
   content: none;
 }
 
+/* ------------------------------- Comments --------------------------------- */
+/* Comment anchors are decorations, not marks — nothing is written into the
+   document, so people with comment-only access can still annotate. */
+
+.tiptap .sd-comment-hit {
+  background: rgba(250, 204, 21, 0.28);
+  border-bottom: 2px solid rgba(202, 138, 4, 0.55);
+  cursor: pointer;
+}
+.tiptap .sd-comment-hit-active {
+  background: rgba(250, 204, 21, 0.5);
+  border-bottom-color: #a16207;
+}
+
 /* ---------------------------- Find & replace ------------------------------ */
 
 .tiptap .sd-search-hit {

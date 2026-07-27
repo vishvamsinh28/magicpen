@@ -3,11 +3,12 @@
 import { useRef } from "react";
 import {
   Plus, Upload, Download, ChevronDown, X, FileText, Menu, Loader2,
-  FileType2, FileCode2, FileDown, Printer, GitCommit,
+  FileType2, FileCode2, FileDown, Printer, GitCommit, Users,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import Logo from "@/components/Logo";
 import Dropdown from "@/components/ui/Dropdown";
+import PresenceBar from "@/components/collab/PresenceBar";
 
 const ACCEPT = ".pdf,.docx,.txt,.rtf,.md,.markdown,.html,.htm";
 
@@ -86,6 +87,22 @@ export default function Header() {
       </span>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        <PresenceBar peers={ws.peers} selfId={ws.user?.id} />
+
+        <button
+          disabled={!hasDoc}
+          onClick={() => ws.setShareOpen(true)}
+          title="Share this document with a link"
+          className={`flex items-center gap-2 rounded-lg border-[1.5px] px-2 py-2 text-[13.5px] font-semibold transition-colors md:px-3.5 md:py-2 ${
+            ws.activeDoc?.shared
+              ? "border-accent bg-accent-soft text-accent-deep hover:bg-accent-faint"
+              : "border-frame bg-paper text-ink hover:bg-cream"
+          } ${hasDoc ? "" : "cursor-not-allowed opacity-45"}`}
+        >
+          <Users size={16} strokeWidth={2.2} />
+          <span className="hidden md:inline">{ws.activeDoc?.shared ? "Shared" : "Share"}</span>
+        </button>
+
         <button
           onClick={ws.createBlankDocument}
           title="New blank document"

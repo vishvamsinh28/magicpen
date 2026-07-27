@@ -10,6 +10,7 @@ import { useWorkspace } from "@/components/workspace-context";
 import { buildDiffPreviewHtml } from "@/lib/diff";
 import { diffHtml } from "@/lib/htmldiff";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useCollab } from "@/components/collab/useCollab";
 import { createExtensions } from "./extensions";
 import { findMatches, searchPluginKey } from "./search";
 import Toolbar from "./Toolbar";
@@ -391,8 +392,21 @@ export default function EditorPane() {
   // Cmd/Ctrl+Shift+V just before a paste event → that paste is plain-text.
   const plainPasteAtRef = useRef(0);
 
+  // Shared documents run on a CRDT so several people can type at once;
+  // private ones keep the plain single-writer path with no network at all.
+  const isShared = !!ws.activeDoc?.shared;
+  const collab = useCollab({ documentId: activeDocId, enabled: isShared });
+  const collabReady = isShared && collab.ready && collab.docId === activeDocId;
+  const ydoc = collabReady ? collab.ydoc : null;
+  const seededRef = useRef(null);
+
+  useEffect(() => {
+    ws.setPeers(isShared ? collab.peers : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isShared, collab.peers]);
+
   const editor = useEditor({
-    extensions: createExtensions(),
+    extensions: createExtensions({ ydoc }),
     immediatelyRender: false,
     editorProps: {
       attributes: { spellcheck: "true" },
@@ -420,7 +434,7 @@ export default function EditorPane() {
     onSelectionUpdate: () => setTick((t) => t + 1),
     onFocus: () => setEditorFocused(true),
     onBlur: () => setEditorFocused(false),
-  });
+  }, [ydoc]);
 
   // Bridge the editor to the workspace context.
   useEffect(() => {
@@ -435,21 +449,41 @@ export default function EditorPane() {
       },
       focus: () => editor.commands.focus(),
     };
+    ws.setEditorInstance(editor);
     return () => {
       if (editorApiRef.current?.editor === editor) editorApiRef.current = null;
+      ws.setEditorInstance((cur) => (cur === editor ? null : cur));
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, editorApiRef]);
 
   // Load content when the active document (or a programmatic rewrite) changes.
+  // In collaborative mode the CRDT is the source of truth, so pushing HTML in
+  // here would clobber whatever co-editors have already typed.
   useEffect(() => {
-    if (!editor) return;
+    // Switching collaboration on swaps the editor instance, so re-read it here
+    // and skip an instance that is already on its way out.
+    const ed = editor;
+    if (!ed || ed.isDestroyed || ydoc) return;
     const target = activeDocId ? (docHtmlRef.current.get(activeDocId) ?? "") : "";
-    if (editor.getHTML() === target) return;
+    if (ed.getHTML() === target) return;
     suppressRef.current = true;
-    editor.commands.setContent(target, { emitUpdate: false });
+    ed.commands.setContent(target, { emitUpdate: false });
     suppressRef.current = false;
     setTick((t) => t + 1);
-  }, [editor, activeDocId, docsVersion, docHtmlRef]);
+  }, [editor, activeDocId, docsVersion, docHtmlRef, ydoc]);
+
+  // First client into a newly shared document plants the existing content into
+  // the empty CRDT; everyone after that receives it over the wire instead.
+  useEffect(() => {
+    const ed = editor;
+    if (!ed || ed.isDestroyed || !ydoc || !collab.needsSeed) return;
+    if (seededRef.current === activeDocId) return;
+    const html = docHtmlRef.current.get(activeDocId) ?? "";
+    if (!html) return;
+    seededRef.current = activeDocId;
+    ed.commands.setContent(html, { emitUpdate: true });
+  }, [editor, ydoc, collab.needsSeed, activeDocId, docHtmlRef]);
 
   // Proposed changes render on the document itself while awaiting review —
   // but only on the document they were proposed for.

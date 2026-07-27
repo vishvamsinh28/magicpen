@@ -10,7 +10,10 @@ import { randomUUID } from "crypto";
 export const now = () => new Date().toISOString();
 export const newId = () => randomUUID();
 
-const EMPTY = { users: [], documents: [], chats: [], messages: [], changes: [], versions: [] };
+const EMPTY = {
+  users: [], documents: [], chats: [], messages: [], changes: [], versions: [],
+  shares: [], comments: [], docstates: [], docupdates: [], presence: [],
+};
 
 /* ------------------------------ Mongo store ------------------------------ */
 
@@ -31,6 +34,11 @@ function mongoStore(uri) {
           d.collection("messages").createIndex({ chatId: 1, createdAt: 1 }),
           d.collection("changes").createIndex({ userId: 1, documentId: 1, createdAt: -1 }),
           d.collection("versions").createIndex({ userId: 1, documentId: 1, createdAt: -1 }),
+          d.collection("shares").createIndex({ token: 1 }, { unique: true }),
+          d.collection("shares").createIndex({ documentId: 1, createdAt: -1 }),
+          d.collection("comments").createIndex({ documentId: 1, createdAt: 1 }),
+          d.collection("docupdates").createIndex({ documentId: 1, seq: 1 }),
+          d.collection("presence").createIndex({ documentId: 1 }),
         ]).catch(() => {});
         return d;
       })();
@@ -203,6 +211,12 @@ export const Documents = {
     await store().removeWhere("documents", { id, userId });
     await store().removeWhere("changes", { documentId: id, userId });
     await store().removeWhere("versions", { documentId: id, userId });
+    // Collaboration state is keyed by document only — it dies with the document.
+    await store().removeWhere("shares", { documentId: id });
+    await store().removeWhere("comments", { documentId: id });
+    await store().removeWhere("docstates", { documentId: id });
+    await store().removeWhere("docupdates", { documentId: id });
+    await store().removeWhere("presence", { documentId: id });
   },
 };
 
@@ -248,6 +262,109 @@ export const Messages = {
       editSummary,
       createdAt: now(),
     }),
+};
+
+/* --------------------------------- Shares --------------------------------- */
+// A share is a capability: whoever holds the token gets `role` on the document.
+// Ownership checks still run separately — a share never grants owner rights.
+
+export const Shares = {
+  listForDocument: (documentId, ownerId) =>
+    store().find("shares", { documentId, ownerId }, { sort: ["createdAt", -1] }),
+  get: (id, ownerId) => store().findOne("shares", { id, ownerId }),
+  getByToken: (token) => store().findOne("shares", { token }),
+  create: ({ ownerId, documentId, token, role = "view", allowDownload = true }) =>
+    store().insert("shares", {
+      id: newId(),
+      ownerId,
+      documentId,
+      token,
+      role,
+      allowDownload,
+      revoked: false,
+      createdAt: now(),
+      updatedAt: now(),
+    }),
+  update: (id, ownerId, patch) =>
+    store().update("shares", { id, ownerId }, { ...patch, updatedAt: now() }),
+  remove: (id, ownerId) => store().removeWhere("shares", { id, ownerId }),
+};
+
+/* -------------------------------- Comments -------------------------------- */
+// Comments are grouped into threads by threadId; the thread id is also the
+// value of the comment mark in the document, which is how they stay anchored.
+
+export const Comments = {
+  listForDocument: (documentId) =>
+    store().find("comments", { documentId }, { sort: ["createdAt", 1] }),
+  get: (id) => store().findOne("comments", { id }),
+  create: ({ documentId, threadId, authorId, authorName, authorKind = "user", body, quote = "" }) =>
+    store().insert("comments", {
+      id: newId(),
+      documentId,
+      threadId,
+      authorId,
+      authorName,
+      authorKind,
+      body,
+      quote,
+      resolved: false,
+      resolvedBy: null,
+      createdAt: now(),
+      updatedAt: now(),
+    }),
+  update: (id, patch) => store().update("comments", { id }, { ...patch, updatedAt: now() }),
+  remove: (id) => store().removeWhere("comments", { id }),
+  removeThread: (documentId, threadId) => store().removeWhere("comments", { documentId, threadId }),
+};
+
+/* ------------------------- Collaboration (Yjs) ---------------------------- */
+// The live document is a Yjs CRDT. `docstates` holds a compacted snapshot and
+// `docupdates` the tail of incremental updates since it; clients pull whatever
+// is newer than the sequence number they hold. Yjs updates are commutative, so
+// no server-side conflict resolution is needed — plain HTTP polling is enough
+// and there is no WebSocket server to run.
+
+export const DocStates = {
+  get: (documentId) => store().findOne("docstates", { documentId }),
+  async upsert(documentId, patch) {
+    const existing = await store().findOne("docstates", { documentId });
+    if (existing) return store().update("docstates", { documentId }, { ...patch, updatedAt: now() });
+    return store().insert("docstates", {
+      id: newId(),
+      documentId,
+      state: null,
+      seq: 0,
+      seeded: false,
+      ...patch,
+      updatedAt: now(),
+    });
+  },
+};
+
+export const DocUpdates = {
+  list: (documentId) => store().find("docupdates", { documentId }, { sort: ["seq", 1] }),
+  add: ({ documentId, seq, update, actorId }) =>
+    store().insert("docupdates", {
+      id: newId(),
+      documentId,
+      seq,
+      update,
+      actorId,
+      createdAt: now(),
+    }),
+  clear: (documentId) => store().removeWhere("docupdates", { documentId }),
+};
+
+export const Presence = {
+  list: (documentId) => store().find("presence", { documentId }),
+  async touch({ documentId, actorId, name, color, role }) {
+    const existing = await store().findOne("presence", { documentId, actorId });
+    const fields = { name, color, role, lastSeenAt: now() };
+    if (existing) return store().update("presence", { documentId, actorId }, fields);
+    return store().insert("presence", { id: newId(), documentId, actorId, ...fields });
+  },
+  remove: (documentId, actorId) => store().removeWhere("presence", { documentId, actorId }),
 };
 
 /* -------------------------------- Versions -------------------------------- */

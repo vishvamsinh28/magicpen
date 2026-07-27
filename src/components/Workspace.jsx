@@ -10,6 +10,8 @@ import NavDrawer from "./shell/NavDrawer";
 import ChatPanel from "./chat/ChatPanel";
 import ChangesPanel from "./panels/ChangesPanel";
 import VersionsPanel from "./panels/VersionsPanel";
+import CommentsPanel from "./panels/CommentsPanel";
+import ShareModal from "./modals/ShareModal";
 import EditorPane from "./editor/EditorPane";
 import FilesModal from "./modals/FilesModal";
 import TemplatesModal from "./modals/TemplatesModal";
@@ -94,7 +96,15 @@ function Shell() {
               ws.mobilePane === "chat" ? "flex" : "hidden"
             } h-full w-full min-w-0 flex-col lg:flex lg:w-[372px] lg:shrink-0`}
           >
-            {ws.leftView === "chat" ? <ChatPanel /> : ws.leftView === "versions" ? <VersionsPanel /> : <ChangesPanel />}
+            {ws.leftView === "chat" ? (
+              <ChatPanel />
+            ) : ws.leftView === "versions" ? (
+              <VersionsPanel />
+            ) : ws.leftView === "comments" ? (
+              <CommentsPanel />
+            ) : (
+              <ChangesPanel />
+            )}
           </div>
           <div
             className={`${
@@ -111,6 +121,7 @@ function Shell() {
       <TemplatesModal />
       <ChatHistoryDrawer />
       <InfoModals />
+      <ShareModal />
       <CommitDialog />
       <Toast />
     </div>
