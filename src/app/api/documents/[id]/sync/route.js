@@ -27,6 +27,14 @@ export async function POST(request, { params }) {
 
   let state = (await DocStates.get(id)) || (await DocStates.upsert(id, {}));
 
+  // Seed claim: a client that finds the CRDT empty asks whether it may plant
+  // the initial content. Exactly one caller wins, so the document is never
+  // seeded twice (which would silently duplicate every block). Edit-role only.
+  let seedGranted = false;
+  if (body.claimSeed === true && can(access.role, "edit")) {
+    seedGranted = (await DocStates.claimSeed(id)).won;
+  }
+
   // Writers push first so their own change comes back in the same round trip.
   if (incoming && can(access.role, "edit")) {
     const seq = (state.seq || 0) + 1;
@@ -74,6 +82,7 @@ export async function POST(request, { params }) {
     seq: state.seq || 0,
     updates: payload,
     seeded: !!state.seeded,
+    seedGranted,
     role: access.role,
     peers,
   });

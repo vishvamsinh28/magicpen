@@ -83,10 +83,38 @@ export function createCollabProvider({ documentId, ydoc, shareToken = null, onPe
     }
   }
 
-  // Seed a brand-new shared document from whatever this client already has.
-  const start = async ({ seedIfEmpty = false } = {}) => {
-    if (seedIfEmpty) pending.push(Y.encodeStateAsUpdate(ydoc));
+  const start = async () => {
     await tick();
+  };
+
+  // Ask the server for the exclusive right to plant this document's initial
+  // content. Returns true only if this client won — the caller seeds only then,
+  // so a new shared doc is never seeded by two clients at once (which would
+  // duplicate every block). Also applies anything that arrived in the meantime.
+  const claimSeed = async () => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}/sync`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ since, claimSeed: true }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (Array.isArray(data.updates) && data.updates.length) {
+        Y.transact(
+          ydoc,
+          () => {
+            for (const u of data.updates) Y.applyUpdate(ydoc, fromB64(u), "remote");
+          },
+          "remote"
+        );
+      }
+      since = data.seq ?? since;
+      onPeers?.(data.peers || []);
+      return !!data.seedGranted;
+    } catch {
+      return false;
+    }
   };
 
   const stop = () => {
@@ -97,7 +125,7 @@ export function createCollabProvider({ documentId, ydoc, shareToken = null, onPe
     fetch(`/api/documents/${documentId}/sync`, { method: "DELETE", headers }).catch(() => {});
   };
 
-  return { start, stop, flush: () => schedule(0) };
+  return { start, claimSeed, stop, flush: () => schedule(0) };
 }
 
 const toB64 = (u8) => {

@@ -62,8 +62,10 @@ function CollabEditor({ info, token, onEditorReady, onSavedHtml }) {
   }, [editor, onEditorReady]);
 
   // First client into a freshly shared document plants the current content.
+  // useEditor tears down and rebuilds the editor when `ydoc` arrives, so guard
+  // against a torn-down instance (whose commands are gone) landing here.
   useEffect(() => {
-    if (!editor || !ready || !needsSeed || seededRef.current) return;
+    if (!editor || editor.isDestroyed || !ready || !needsSeed || seededRef.current) return;
     seededRef.current = true;
     editor.commands.setContent(info.document.contentHtml || "", { emitUpdate: true });
   }, [editor, ready, needsSeed, info.document.contentHtml]);
@@ -109,14 +111,15 @@ function PresenceHidden({ peers, selfId }) {
 /* ---------------------------- read-only viewer ---------------------------- */
 
 function ReadOnlyDoc({ info, token, onEditorReady }) {
-  const [html, setHtml] = useState(info.document.contentHtml || "");
-
   const editor = useEditor({
     extensions: createExtensions(),
     editable: false,
     immediatelyRender: false,
-    content: html,
+    content: info.document.contentHtml || "",
   });
+  // Last content applied to the editor — a ref so the poll compares against the
+  // current value without re-subscribing the interval on every change.
+  const appliedRef = useRef(info.document.contentHtml || "");
 
   useEffect(() => {
     if (editor) onEditorReady(editor);
@@ -130,11 +133,9 @@ function ReadOnlyDoc({ info, token, onEditorReady }) {
         const data = await apiFetch(`/api/share/${token}`);
         if (cancelled) return;
         const next = data.document.contentHtml || "";
-        setHtml((prev) => {
-          if (prev === next) return prev;
-          editor?.commands.setContent(next, { emitUpdate: false });
-          return next;
-        });
+        if (next === appliedRef.current) return;
+        appliedRef.current = next;
+        if (editor && !editor.isDestroyed) editor.commands.setContent(next, { emitUpdate: false });
       } catch {
         /* keep showing what we have */
       }

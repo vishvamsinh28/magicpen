@@ -37,6 +37,7 @@ function mongoStore(uri) {
           d.collection("shares").createIndex({ token: 1 }, { unique: true }),
           d.collection("shares").createIndex({ documentId: 1, createdAt: -1 }),
           d.collection("comments").createIndex({ documentId: 1, createdAt: 1 }),
+          d.collection("docstates").createIndex({ documentId: 1 }, { unique: true }),
           d.collection("docupdates").createIndex({ documentId: 1, seq: 1 }),
           d.collection("presence").createIndex({ documentId: 1 }),
         ]).catch(() => {});
@@ -85,6 +86,32 @@ function mongoStore(uri) {
       if (sort) cursor = cursor.sort({ [sort[0]]: sort[1] });
       if (limit) cursor = cursor.limit(limit);
       return (await cursor.toArray()).map(strip);
+    },
+    // Atomically reserve the right to plant a shared document's initial content.
+    // Grants only when nobody has seeded and no fresh reservation is held; a
+    // stale lock (a winner that never delivered content) is reclaimable so the
+    // document can't get stuck empty. Single findOneAndUpdate → race-safe.
+    async claimSeed(documentId, staleMs) {
+      const d = await db();
+      const col = d.collection("docstates");
+      await col
+        .updateOne(
+          { documentId },
+          { $setOnInsert: { _id: newId(), documentId, state: null, seq: 0, seeded: false, seedLockAt: null, updatedAt: now() } },
+          { upsert: true }
+        )
+        .catch(() => {}); // concurrent upsert loses the unique index race — fine
+      const staleBefore = new Date(Date.now() - staleMs).toISOString();
+      const res = await col.findOneAndUpdate(
+        {
+          documentId,
+          seeded: { $ne: true },
+          $or: [{ seedLockAt: null }, { seedLockAt: { $lt: staleBefore } }],
+        },
+        { $set: { seedLockAt: now(), updatedAt: now() } },
+        { returnDocument: "after" }
+      );
+      return { won: !!res };
     },
   };
 }
@@ -163,6 +190,22 @@ function fileStore() {
       }
       if (limit) out = out.slice(0, limit);
       return out;
+    },
+    // See the Mongo variant. The check-and-set runs synchronously after the
+    // single await, so two concurrent callers can't both win in one process.
+    async claimSeed(documentId, staleMs) {
+      const data = await load();
+      let row = data.docstates.find((r) => r.documentId === documentId);
+      if (!row) {
+        row = { id: newId(), documentId, state: null, seq: 0, seeded: false, seedLockAt: null, updatedAt: now() };
+        data.docstates.push(row);
+      }
+      const stale = !row.seedLockAt || Date.now() - new Date(row.seedLockAt).getTime() > staleMs;
+      if (row.seeded === true || !stale) return { won: false };
+      row.seedLockAt = now();
+      row.updatedAt = now();
+      await persist(data);
+      return { won: true };
     },
   };
 }
@@ -325,20 +368,32 @@ export const Comments = {
 // no server-side conflict resolution is needed — plain HTTP polling is enough
 // and there is no WebSocket server to run.
 
+// A winner that never delivers content releases its reservation after this,
+// so a crash during seeding can't leave the document permanently empty.
+const SEED_LOCK_STALE_MS = 8000;
+
 export const DocStates = {
   get: (documentId) => store().findOne("docstates", { documentId }),
+  // Returns { won } — true only for the single caller allowed to plant content.
+  claimSeed: (documentId) => store().claimSeed(documentId, SEED_LOCK_STALE_MS),
   async upsert(documentId, patch) {
     const existing = await store().findOne("docstates", { documentId });
     if (existing) return store().update("docstates", { documentId }, { ...patch, updatedAt: now() });
-    return store().insert("docstates", {
-      id: newId(),
-      documentId,
-      state: null,
-      seq: 0,
-      seeded: false,
-      ...patch,
-      updatedAt: now(),
-    });
+    try {
+      return await store().insert("docstates", {
+        id: newId(),
+        documentId,
+        state: null,
+        seq: 0,
+        seeded: false,
+        ...patch,
+        updatedAt: now(),
+      });
+    } catch {
+      // Lost the create race to a concurrent request (the unique documentId
+      // index rejected the second insert) — the row exists now, so update it.
+      return store().update("docstates", { documentId }, { ...patch, updatedAt: now() });
+    }
   },
 };
 

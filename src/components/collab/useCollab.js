@@ -34,17 +34,20 @@ export function useCollab({ documentId, shareToken = null, enabled = true }) {
     });
     providerRef.current = provider;
 
-    let seeded = false;
-    provider
-      .start()
-      .catch(() => {})
-      .finally(() => {
+    (async () => {
+      await provider.start().catch(() => {});
+      if (cancelled) return;
+      // If the CRDT is empty after the first round trip, ask the server for the
+      // exclusive right to seed. Only the single winner plants content, so two
+      // clients opening a fresh shared doc at once can't duplicate it. A client
+      // whose start() already pulled someone else's content skips the claim.
+      let needsSeed = false;
+      if (ydoc.getXmlFragment("default").length === 0) {
+        needsSeed = await provider.claimSeed();
         if (cancelled) return;
-        // An empty CRDT after the first round trip means nobody has planted
-        // the document yet and this client should.
-        seeded = ydoc.getXmlFragment("default").length > 0;
-        setState({ ydoc, ready: true, needsSeed: !seeded, docId: documentId });
-      });
+      }
+      setState({ ydoc, ready: true, needsSeed, docId: documentId });
+    })();
 
     return () => {
       cancelled = true;
