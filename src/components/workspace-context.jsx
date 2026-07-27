@@ -52,6 +52,12 @@ export function WorkspaceProvider({ user, children }) {
   const [changesVersion, setChangesVersion] = useState(0);
   const [printHtml, setPrintHtml] = useState(null); // non-null while printing
 
+  /* ------------------------------- versions -------------------------------- */
+  // Manual commits (git-style). Nothing is snapshotted automatically.
+  const [versionsVersion, setVersionsVersion] = useState(0); // bump to refresh the panel
+  const [versionPreview, setVersionPreview] = useState(null); // {id, label, createdAt, docId, html, compare}
+  const [commitOpen, setCommitOpen] = useState(false); // the "Commit version" dialog
+
   const toastTimerRef = useRef(null);
   const showToast = (message, type = "error") => {
     clearTimeout(toastTimerRef.current);
@@ -562,6 +568,107 @@ export function WorkspaceProvider({ user, children }) {
     }
   };
 
+  /* ------------------------------- versions -------------------------------- */
+
+  const commitVersion = async (label) => {
+    const docId = activeDocId;
+    if (!docId) {
+      showToast("Open a document to commit a version.");
+      return false;
+    }
+    const html = editorApiRef.current?.getHTML() ?? docHtmlRef.current.get(docId) ?? "";
+    try {
+      await apiFetch("/api/versions", {
+        method: "POST",
+        body: JSON.stringify({ documentId: docId, label: label || "", contentHtml: html }),
+      });
+      setVersionsVersion((v) => v + 1);
+      showToast(label ? `Committed “${label}”` : "Version committed", "info");
+      return true;
+    } catch (e) {
+      showToast(e.message);
+      return false;
+    }
+  };
+
+  const openVersionPreview = async (meta) => {
+    try {
+      const { version } = await apiFetch(`/api/versions/${meta.id}`);
+      setVersionPreview({
+        id: version.id,
+        label: version.label,
+        createdAt: version.createdAt,
+        docId: version.documentId,
+        html: version.contentHtml || "",
+        compare: false,
+      });
+      setMobilePane("editor");
+    } catch (e) {
+      showToast(e.message);
+    }
+  };
+
+  const closeVersionPreview = () => setVersionPreview(null);
+
+  const toggleVersionCompare = () =>
+    setVersionPreview((p) => (p ? { ...p, compare: !p.compare } : p));
+
+  // Check out a commit: the document becomes that snapshot. History is left
+  // untouched — uncommitted work is simply replaced (the confirm dialog warns).
+  const restoreVersion = async (v) => {
+    let version = v || versionPreview;
+    if (!version) return false;
+    const docId = version.docId ?? version.documentId;
+    if (pendingChange && (pendingChange.docId ?? null) === docId) {
+      showToast("Apply or dismiss the pending AI change first.");
+      return false;
+    }
+    try {
+      let html = version.html;
+      if (html == null) {
+        const { version: full } = await apiFetch(`/api/versions/${version.id}`);
+        html = full.contentHtml || "";
+      }
+      docHtmlRef.current.set(docId, html);
+      if (docId === activeDocId) editorApiRef.current?.setContent(html);
+      setDocsVersion((x) => x + 1);
+      await apiFetch(`/api/documents/${docId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ contentHtml: html }),
+      });
+      showToast(version.label ? `Restored “${version.label}”` : "Version restored", "info");
+      setVersionPreview(null);
+      return true;
+    } catch (e) {
+      showToast(e.message);
+      return false;
+    }
+  };
+
+  const renameVersion = async (id, label) => {
+    try {
+      await apiFetch(`/api/versions/${id}`, { method: "PATCH", body: JSON.stringify({ label }) });
+      setVersionsVersion((v) => v + 1);
+      setVersionPreview((p) => (p?.id === id ? { ...p, label } : p));
+      return true;
+    } catch (e) {
+      showToast(e.message);
+      return false;
+    }
+  };
+
+  const deleteVersion = async (id) => {
+    try {
+      await apiFetch(`/api/versions/${id}`, { method: "DELETE" });
+      setVersionsVersion((v) => v + 1);
+      setVersionPreview((p) => (p?.id === id ? null : p));
+      return true;
+    } catch (e) {
+      showToast(e.message);
+      return false;
+    }
+  };
+
   /* -------------------------------- export -------------------------------- */
 
   const downloadDocument = async (format = "docx") => {
@@ -606,6 +713,10 @@ export function WorkspaceProvider({ user, children }) {
     sendMessage, approvePendingChange, rejectPendingChange, newConversation, loadChat, deleteChat,
     // changes
     changesVersion, restoreChange, applyEdits,
+    // versions (manual commits)
+    versionsVersion, versionPreview, commitOpen, setCommitOpen,
+    commitVersion, openVersionPreview, closeVersionPreview, toggleVersionCompare,
+    restoreVersion, renameVersion, deleteVersion,
     // export & print
     downloadDocument, printHtml, setPrintHtml,
     // settings & ui

@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import {
   Plus, Upload, Download, ChevronDown, X, FileText, Menu, Loader2,
-  FileType2, FileCode2, FileDown, Printer,
+  FileType2, FileCode2, FileDown, Printer, GitCommit,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import Logo from "@/components/Logo";
@@ -102,6 +102,18 @@ export default function Header() {
         >
           {ws.uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} strokeWidth={2.2} />}
           <span className="hidden md:inline">Upload</span>
+        </button>
+
+        <button
+          disabled={!hasDoc}
+          onClick={() => ws.setCommitOpen(true)}
+          title="Commit this version — a snapshot you can always come back to"
+          className={`flex items-center gap-2 rounded-lg border-[1.5px] border-frame bg-paper px-2 py-2 text-[13.5px] font-semibold text-ink transition-colors md:px-3.5 md:py-2 ${
+            hasDoc ? "hover:bg-cream" : "cursor-not-allowed opacity-45"
+          }`}
+        >
+          <GitCommit size={16} strokeWidth={2.2} />
+          <span className="hidden md:inline">Commit</span>
         </button>
 
         <div

@@ -10,7 +10,7 @@ import { randomUUID } from "crypto";
 export const now = () => new Date().toISOString();
 export const newId = () => randomUUID();
 
-const EMPTY = { users: [], documents: [], chats: [], messages: [], changes: [] };
+const EMPTY = { users: [], documents: [], chats: [], messages: [], changes: [], versions: [] };
 
 /* ------------------------------ Mongo store ------------------------------ */
 
@@ -30,6 +30,7 @@ function mongoStore(uri) {
           d.collection("chats").createIndex({ userId: 1, updatedAt: -1 }),
           d.collection("messages").createIndex({ chatId: 1, createdAt: 1 }),
           d.collection("changes").createIndex({ userId: 1, documentId: 1, createdAt: -1 }),
+          d.collection("versions").createIndex({ userId: 1, documentId: 1, createdAt: -1 }),
         ]).catch(() => {});
         return d;
       })();
@@ -201,6 +202,7 @@ export const Documents = {
   remove: async (id, userId) => {
     await store().removeWhere("documents", { id, userId });
     await store().removeWhere("changes", { documentId: id, userId });
+    await store().removeWhere("versions", { documentId: id, userId });
   },
 };
 
@@ -246,6 +248,27 @@ export const Messages = {
       editSummary,
       createdAt: now(),
     }),
+};
+
+/* -------------------------------- Versions -------------------------------- */
+// Manual commits: full snapshots the user explicitly saves. Nothing is
+// created automatically — a document only has the versions its owner commits.
+
+export const Versions = {
+  list: (documentId, userId) =>
+    store().find("versions", { documentId, userId }, { sort: ["createdAt", -1] }),
+  get: (id, userId) => store().findOne("versions", { id, userId }),
+  add: ({ userId, documentId, label = "", contentHtml = "" }) =>
+    store().insert("versions", {
+      id: newId(),
+      userId,
+      documentId,
+      label,
+      contentHtml,
+      createdAt: now(),
+    }),
+  update: (id, userId, patch) => store().update("versions", { id, userId }, patch),
+  remove: (id, userId) => store().removeWhere("versions", { id, userId }),
 };
 
 /* -------------------------------- Changes --------------------------------- */

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { MessageSquare, FileText, TriangleAlert } from "lucide-react";
 import { WorkspaceProvider, useWorkspace } from "./workspace-context";
 import PrintSheet from "./PrintSheet";
@@ -8,11 +9,13 @@ import IconRail from "./shell/IconRail";
 import NavDrawer from "./shell/NavDrawer";
 import ChatPanel from "./chat/ChatPanel";
 import ChangesPanel from "./panels/ChangesPanel";
+import VersionsPanel from "./panels/VersionsPanel";
 import EditorPane from "./editor/EditorPane";
 import FilesModal from "./modals/FilesModal";
 import TemplatesModal from "./modals/TemplatesModal";
 import ChatHistoryDrawer from "./modals/ChatHistoryDrawer";
 import InfoModals from "./modals/InfoModals";
+import PromptDialog from "./ui/PromptDialog";
 
 // Mobile-only segmented control under the header (desktop shows both panes
 // side by side). Styled like the header's document tabs.
@@ -37,6 +40,30 @@ function MobilePaneSwitcher() {
         {tab("editor", <FileText size={14} />, "Editor")}
       </div>
     </div>
+  );
+}
+
+// One dialog serves every "Commit version" entry point (header, rail, panel).
+function CommitDialog() {
+  const ws = useWorkspace();
+  const [busy, setBusy] = useState(false);
+  return (
+    <PromptDialog
+      open={ws.commitOpen}
+      title="Commit this version"
+      placeholder="What's in this version? (optional)"
+      confirmLabel="Commit"
+      allowEmpty
+      busy={busy}
+      onSubmit={async (value) => {
+        if (busy) return;
+        setBusy(true);
+        const ok = await ws.commitVersion(value.trim());
+        setBusy(false);
+        if (ok) ws.setCommitOpen(false);
+      }}
+      onCancel={() => ws.setCommitOpen(false)}
+    />
   );
 }
 
@@ -67,7 +94,7 @@ function Shell() {
               ws.mobilePane === "chat" ? "flex" : "hidden"
             } h-full w-full min-w-0 flex-col lg:flex lg:w-[372px] lg:shrink-0`}
           >
-            {ws.leftView === "chat" ? <ChatPanel /> : <ChangesPanel />}
+            {ws.leftView === "chat" ? <ChatPanel /> : ws.leftView === "versions" ? <VersionsPanel /> : <ChangesPanel />}
           </div>
           <div
             className={`${
@@ -84,6 +111,7 @@ function Shell() {
       <TemplatesModal />
       <ChatHistoryDrawer />
       <InfoModals />
+      <CommitDialog />
       <Toast />
     </div>
   );

@@ -2,14 +2,97 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import { FileText, Upload, Loader2, Minus, Plus, ShieldCheck } from "lucide-react";
+import { FileText, Upload, Loader2, Minus, Plus, ShieldCheck, Eye, GitCommit, RotateCcw, X } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import { buildDiffPreviewHtml } from "@/lib/diff";
+import { diffHtml } from "@/lib/htmldiff";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { createExtensions } from "./extensions";
 import Toolbar from "./Toolbar";
 
 const ZOOM_STEPS = [50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200];
 const ACCEPT = ".pdf,.docx,.txt,.rtf,.md,.markdown,.html,.htm";
+
+// Sticky bar shown while a commit is previewed on the page. Compare overlays
+// red/green marks for what restoring this commit would change.
+function VersionBar() {
+  const ws = useWorkspace();
+  const { versionPreview } = ws;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!versionPreview) return null;
+
+  const when = new Date(versionPreview.createdAt).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return (
+    <div className="pointer-events-none sticky top-2.5 z-10 flex justify-center px-3">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-full border-[1.5px] border-frame bg-paper py-1.5 pl-4 pr-1.5 shadow-pop">
+        <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-ink">
+          <Eye size={15} />
+          <span className="max-w-44 truncate">
+            {versionPreview.label ? `“${versionPreview.label}”` : "Commit"}
+          </span>
+        </span>
+        <span className="hidden text-[12px] text-muted sm:inline">{when}</span>
+        {versionPreview.compare && (
+          <span className="hidden items-center gap-1.5 text-[12px] text-muted md:flex">
+            <ins className="rounded-[3px] bg-[#e3f1e8] px-1 text-good no-underline">restored</ins>
+            <del className="rounded-[3px] bg-red-50 px-1 text-red-700 decoration-red-400">replaced</del>
+          </span>
+        )}
+        <span className="flex items-center gap-1.5">
+          <button
+            onClick={ws.toggleVersionCompare}
+            aria-pressed={versionPreview.compare}
+            className={`rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors ${
+              versionPreview.compare
+                ? "border-accent bg-accent-soft text-accent-deep"
+                : "border-line bg-paper text-ink-soft hover:bg-cream"
+            }`}
+          >
+            Compare
+          </button>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1 text-[12.5px] font-semibold text-white transition-colors hover:bg-accent-deep"
+          >
+            <RotateCcw size={12} />
+            Restore
+          </button>
+          <button
+            onClick={ws.closeVersionPreview}
+            aria-label="Back to current version"
+            className="rounded-full border border-line bg-paper p-1.5 text-ink-soft transition-colors hover:bg-cream"
+          >
+            <X size={13} />
+          </button>
+        </span>
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={versionPreview.label ? `Restore “${versionPreview.label}”?` : "Restore this commit?"}
+        message="The document goes back to this commit. Anything not committed will be replaced — commit the current version first if you want to keep it."
+        confirmLabel="Restore"
+        danger={false}
+        busy={busy}
+        onConfirm={async () => {
+          if (busy) return;
+          setBusy(true);
+          await ws.restoreVersion();
+          setBusy(false);
+          setConfirmOpen(false);
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </div>
+  );
+}
 
 // Sticky bar shown over the document while proposed changes are previewed on
 // the page. Apply/Dismiss act on the same pending change as the chat card.
@@ -60,7 +143,10 @@ function ReviewBar() {
 
 export default function EditorPane() {
   const ws = useWorkspace();
-  const { activeDocId, docsVersion, docHtmlRef, editorApiRef, uploading, pendingChange, pendingDeselected } = ws;
+  const {
+    activeDocId, docsVersion, docHtmlRef, editorApiRef, uploading,
+    pendingChange, pendingDeselected, versionPreview,
+  } = ws;
 
   const handlersRef = useRef({});
   handlersRef.current.onEditorUpdate = ws.onEditorUpdate;
@@ -131,8 +217,21 @@ export default function EditorPane() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewing, pendingChange, pendingDeselected, activeDocId]);
 
+  // Commit preview — takes precedence over a pending-change review overlay.
+  const previewingVersion = !!versionPreview && versionPreview.docId === activeDocId;
+  const versionHtml = useMemo(() => {
+    if (!previewingVersion) return null;
+    if (!versionPreview.compare) return versionPreview.html;
+    const current = activeDocId ? (docHtmlRef.current.get(activeDocId) ?? "") : "";
+    return diffHtml(current, versionPreview.html);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewingVersion, versionPreview, activeDocId]);
+
+  const overlayHtml = previewingVersion ? versionHtml : reviewing ? reviewHtml : null;
+  const overlayActive = overlayHtml != null;
+
   const isEmpty = !editor || editor.isEmpty;
-  const showDropzone = !activeDocId && isEmpty && !uploading && !editorFocused && !reviewing;
+  const showDropzone = !activeDocId && isEmpty && !uploading && !editorFocused && !overlayActive;
 
   /* ------------------------------ drag & drop ------------------------------ */
 
@@ -156,7 +255,7 @@ export default function EditorPane() {
 
   return (
     <section className="flex h-full min-w-0 flex-1 flex-col gap-2.5">
-      <div className={reviewing ? "pointer-events-none opacity-60" : undefined} aria-disabled={reviewing}>
+      <div className={overlayActive ? "pointer-events-none opacity-60" : undefined} aria-disabled={overlayActive}>
         <Toolbar editor={editor} />
       </div>
 
@@ -168,23 +267,23 @@ export default function EditorPane() {
           onDragOver={(e) => { if (hasFiles(e)) e.preventDefault(); }}
           onDrop={onDrop}
         >
-          {reviewing && <ReviewBar />}
+          {previewingVersion ? <VersionBar /> : reviewing && <ReviewBar />}
           <div
             style={{ zoom: zoomValue / 100 }}
             className={`px-3 py-6 md:px-10 md:py-9 ${showDropzone ? "sd-hide-placeholder" : ""}`}
           >
             <div
               className={`doc-editor mx-auto w-[850px] max-w-full rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px] ${
-                reviewing ? "" : "cursor-text"
+                overlayActive ? "" : "cursor-text"
               }`}
               onClick={(e) => {
-                if (!reviewing && e.target === e.currentTarget) editor?.commands.focus("end");
+                if (!overlayActive && e.target === e.currentTarget) editor?.commands.focus("end");
               }}
             >
-              {reviewing && reviewHtml != null && (
-                <div className="tiptap diff-doc" dangerouslySetInnerHTML={{ __html: reviewHtml }} />
+              {overlayActive && (
+                <div className="tiptap diff-doc" dangerouslySetInnerHTML={{ __html: overlayHtml }} />
               )}
-              <div className={reviewing ? "hidden" : undefined}>
+              <div className={overlayActive ? "hidden" : undefined}>
                 <EditorContent editor={editor} />
               </div>
             </div>

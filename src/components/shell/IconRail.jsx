@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  PanelLeft, Plus, FolderOpen, MessageSquare, FileText, History,
+  PanelLeft, Plus, FolderOpen, MessageSquare, FileText, History, GitCommit,
   Sparkles, CircleHelp, BookOpen, Bug, Settings, UserRound,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
@@ -73,6 +73,13 @@ export default function IconRail() {
           onClick={() => ws.setLeftView(ws.leftView === "changes" ? "chat" : "changes")}
         >
           <History size={19} strokeWidth={1.9} />
+        </RailButton>
+        <RailButton
+          label="Commits"
+          active={ws.leftView === "versions"}
+          onClick={() => ws.setLeftView(ws.leftView === "versions" ? "chat" : "versions")}
+        >
+          <GitCommit size={19} strokeWidth={1.9} />
         </RailButton>
       </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Plus, FolderOpen, MessageSquare, FileText, History, Sparkles,
+  Plus, FolderOpen, MessageSquare, FileText, History, GitCommit, Sparkles,
   CircleHelp, BookOpen, Bug, Settings, UserRound, X,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
@@ -62,6 +62,14 @@ export default function NavDrawer() {
             label="Changes"
             onClick={go(() => {
               ws.setLeftView("changes");
+              ws.setMobilePane("chat");
+            })}
+          />
+          <DrawerItem
+            icon={<GitCommit size={19} strokeWidth={1.9} />}
+            label="Commits"
+            onClick={go(() => {
+              ws.setLeftView("versions");
               ws.setMobilePane("chat");
             })}
           />
