@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import { FileText, Upload, Loader2, Minus, Plus, ShieldCheck, Eye, GitCommit, RotateCcw, X } from "lucide-react";
+import {
+  FileText, Upload, Loader2, Minus, Plus, ShieldCheck, Eye, RotateCcw, X,
+  ArrowUp, ArrowDown, CaseSensitive, ListTree,
+} from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import { buildDiffPreviewHtml } from "@/lib/diff";
 import { diffHtml } from "@/lib/htmldiff";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { createExtensions } from "./extensions";
+import { findMatches, searchPluginKey } from "./search";
 import Toolbar from "./Toolbar";
 
 const ZOOM_STEPS = [50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200];
@@ -141,6 +145,228 @@ function ReviewBar() {
   );
 }
 
+// Compact find & replace card (Ctrl/Cmd+F). Owns the query state, feeds match
+// decorations to the SearchHighlight plugin, and replaces via transactions so
+// marks on surrounding text survive.
+function FindReplacePanel({ editor, focusNonce, onClose }) {
+  const [query, setQuery] = useState(() => {
+    // Prefill from the current selection, like Google Docs.
+    const { from, to, empty } = editor.state.selection;
+    if (empty) return "";
+    const text = editor.state.doc.textBetween(from, to, " ").trim();
+    return text.length && text.length <= 80 ? text : "";
+  });
+  const [replaceText, setReplaceText] = useState("");
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [matchCount, setMatchCount] = useState(0);
+  const matchesRef = useRef([]);
+  const paramsRef = useRef({ query: "", caseSensitive: false, active: -1 });
+  const suppressRef = useRef(false);
+  const inputRef = useRef(null);
+
+  const scrollToMatch = (match) => {
+    if (!match) return;
+    const dom = editor.view.domAtPos(match.from);
+    const el = dom.node.nodeType === 1 ? dom.node : dom.node.parentElement;
+    el?.scrollIntoView({ block: "center" });
+  };
+
+  // Recompute matches + decorations. activeIndex wraps in both directions.
+  const applySearch = (q, cs, nextActive, scroll) => {
+    const matches = findMatches(editor.state.doc, q, cs);
+    const idx = matches.length ? ((nextActive % matches.length) + matches.length) % matches.length : -1;
+    matchesRef.current = matches;
+    paramsRef.current = { query: q, caseSensitive: cs, active: idx };
+    suppressRef.current = true;
+    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches, activeIndex: idx }));
+    suppressRef.current = false;
+    setMatchCount(matches.length);
+    setActive(idx);
+    if (scroll && idx >= 0) scrollToMatch(matches[idx]);
+  };
+
+  useEffect(() => {
+    applySearch(query, caseSensitive, 0, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, caseSensitive]);
+
+  // Doc edited while the panel is open (typing, AI, replace) — recompute.
+  useEffect(() => {
+    const onUpdate = () => {
+      if (suppressRef.current) return;
+      const p = paramsRef.current;
+      applySearch(p.query, p.caseSensitive, Math.max(p.active, 0), false);
+    };
+    editor.on("update", onUpdate);
+    return () => {
+      editor.off("update", onUpdate);
+      // Leaving the panel clears the highlights.
+      editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: [], activeIndex: -1 }));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [focusNonce]);
+
+  const step = (dir) => applySearch(query, caseSensitive, (active < 0 ? 0 : active + dir), true);
+
+  const replaceOne = () => {
+    const match = matchesRef.current[active];
+    if (!match) return;
+    suppressRef.current = true;
+    editor.view.dispatch(editor.state.tr.insertText(replaceText, match.from, match.to));
+    suppressRef.current = false;
+    // Land on the next match after the replacement (don't re-match inside it).
+    const afterPos = match.from + replaceText.length;
+    const fresh = findMatches(editor.state.doc, query, caseSensitive);
+    const nextIdx = Math.max(0, fresh.findIndex((m) => m.from >= afterPos));
+    applySearch(query, caseSensitive, fresh.length ? nextIdx : 0, true);
+  };
+
+  const replaceAll = () => {
+    const matches = matchesRef.current;
+    if (!matches.length) return;
+    let tr = editor.state.tr;
+    for (let i = matches.length - 1; i >= 0; i--) {
+      tr = tr.insertText(replaceText, matches[i].from, matches[i].to);
+    }
+    suppressRef.current = true;
+    editor.view.dispatch(tr);
+    suppressRef.current = false;
+    applySearch(query, caseSensitive, 0, false);
+  };
+
+  const close = () => {
+    onClose();
+    editor.commands.focus();
+  };
+
+  const onFindKeys = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      step(e.shiftKey ? -1 : 1);
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  };
+
+  return (
+    <div className="absolute right-3 top-3 z-30 w-[340px] max-w-[calc(100%-24px)] rounded-xl border-[1.5px] border-frame bg-paper p-2 shadow-pop">
+      <div className="flex items-center gap-1">
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onFindKeys}
+          placeholder="Find in document"
+          className="h-8 min-w-0 flex-1 rounded-md border border-line bg-paper px-2.5 text-[13px] text-ink outline-none placeholder:text-muted focus:border-accent"
+        />
+        <span className="w-12 shrink-0 text-center text-[11.5px] tabular-nums text-muted">
+          {query ? (matchCount ? `${active + 1}/${matchCount}` : "0") : ""}
+        </span>
+        <button
+          onClick={() => setCaseSensitive((v) => !v)}
+          title="Match case"
+          aria-pressed={caseSensitive}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors ${
+            caseSensitive ? "bg-accent-soft text-accent-deep" : "text-ink-soft hover:bg-cream"
+          }`}
+        >
+          <CaseSensitive size={15} />
+        </button>
+        <button onClick={() => step(-1)} disabled={!matchCount} title="Previous match (Shift+Enter)" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-cream disabled:opacity-35">
+          <ArrowUp size={14} />
+        </button>
+        <button onClick={() => step(1)} disabled={!matchCount} title="Next match (Enter)" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-cream disabled:opacity-35">
+          <ArrowDown size={14} />
+        </button>
+        <button onClick={close} aria-label="Close find and replace" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-cream">
+          <X size={14} />
+        </button>
+      </div>
+      <div className="mt-1.5 flex items-center gap-1">
+        <input
+          value={replaceText}
+          onChange={(e) => setReplaceText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              replaceOne();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              close();
+            }
+          }}
+          placeholder="Replace with"
+          className="h-8 min-w-0 flex-1 rounded-md border border-line bg-paper px-2.5 text-[13px] text-ink outline-none placeholder:text-muted focus:border-accent"
+        />
+        <button
+          onClick={replaceOne}
+          disabled={!matchCount}
+          className="h-8 shrink-0 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-cream disabled:opacity-35"
+        >
+          Replace
+        </button>
+        <button
+          onClick={replaceAll}
+          disabled={!matchCount}
+          className="h-8 shrink-0 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-cream disabled:opacity-35"
+        >
+          All
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Heading outline — click to jump. Derived from the live doc on every edit.
+function OutlinePanel({ editor, tick, onNavigate }) {
+  const items = useMemo(() => {
+    if (!editor) return [];
+    const found = [];
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === "heading" && node.attrs.level <= 3 && node.textContent.trim()) {
+        found.push({ level: node.attrs.level, text: node.textContent.trim(), pos });
+      }
+    });
+    return found;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, tick]);
+
+  return (
+    <div className="absolute left-3 top-12 z-20 flex max-h-[65%] w-60 flex-col rounded-xl border-[1.5px] border-frame bg-paper shadow-pop">
+      <p className="shrink-0 border-b border-line px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        Outline
+      </p>
+      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        {items.length === 0 && (
+          <p className="px-2 py-1.5 text-[12px] leading-relaxed text-muted">
+            Add headings and they'll show up here.
+          </p>
+        )}
+        {items.map((item, i) => (
+          <button
+            key={i}
+            onClick={() => onNavigate(item)}
+            className={`block w-full truncate rounded-md py-1 text-left text-[12.5px] text-ink-soft transition-colors hover:bg-cream hover:text-ink ${
+              item.level === 1 ? "pl-2 font-semibold text-ink" : item.level === 2 ? "pl-4" : "pl-6"
+            } pr-2`}
+          >
+            {item.text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function EditorPane() {
   const ws = useWorkspace();
   const {
@@ -155,14 +381,35 @@ export default function EditorPane() {
   const [zoom, setZoom] = useState("fit"); // 'fit' | number (percent)
   const [dragDepth, setDragDepth] = useState(0);
   const [editorFocused, setEditorFocused] = useState(false);
-  const [, setTick] = useState(0); // re-render on editor create/update for empty checks
+  const [tick, setTick] = useState(0); // re-render on editor create/update/selection
   const fileInputRef = useRef(null);
+
+  const [findOpen, setFindOpen] = useState(false);
+  const [findNonce, setFindNonce] = useState(0); // re-focus the find input
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [countMode, setCountMode] = useState("words"); // 'words' | 'chars' | 'charsNoSpaces'
+  // Cmd/Ctrl+Shift+V just before a paste event → that paste is plain-text.
+  const plainPasteAtRef = useRef(0);
 
   const editor = useEditor({
     extensions: createExtensions(),
     immediatelyRender: false,
     editorProps: {
       attributes: { spellcheck: "true" },
+      handlePaste: (view, event) => {
+        if (Date.now() - plainPasteAtRef.current > 1000) return false;
+        plainPasteAtRef.current = 0;
+        const text = event.clipboardData?.getData("text/plain");
+        if (text == null) return false;
+        event.preventDefault();
+        const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const html = text
+          .split(/\r?\n\s*\r?\n/)
+          .map((p) => `<p>${esc(p).replace(/\r?\n/g, "<br>")}</p>`)
+          .join("");
+        view.pasteHTML(html);
+        return true;
+      },
     },
     onCreate: () => setTick((t) => t + 1),
     onUpdate: ({ editor: ed }) => {
@@ -170,6 +417,7 @@ export default function EditorPane() {
       handlersRef.current.onEditorUpdate?.(ed.getHTML());
       setTick((t) => t + 1);
     },
+    onSelectionUpdate: () => setTick((t) => t + 1),
     onFocus: () => setEditorFocused(true),
     onBlur: () => setEditorFocused(false),
   });
@@ -233,6 +481,65 @@ export default function EditorPane() {
   const isEmpty = !editor || editor.isEmpty;
   const showDropzone = !activeDocId && isEmpty && !uploading && !editorFocused && !overlayActive;
 
+  // Ctrl/Cmd+F opens in-document find (browser find is useless inside the
+  // scroll container). Typing in inputs elsewhere in the app is left alone.
+  const overlayRef = useRef(false);
+  overlayRef.current = overlayActive;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "f") return;
+      const t = e.target;
+      if (t instanceof HTMLElement && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (overlayRef.current) return;
+      e.preventDefault();
+      setFindOpen(true);
+      setFindNonce((n) => n + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // The find panel and outline make no sense over a diff preview.
+  useEffect(() => {
+    if (overlayActive) {
+      setFindOpen(false);
+      setOutlineOpen(false);
+    }
+  }, [overlayActive]);
+
+  /* ------------------------------ word count ------------------------------- */
+
+  const wordsIn = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
+  const countLabel = (() => {
+    if (!editor) return "";
+    const doc = editor.state.doc;
+    const docText = doc.textBetween(0, doc.content.size, " ");
+    const { from, to, empty } = editor.state.selection;
+    const selText = empty ? null : doc.textBetween(from, to, " ");
+    if (countMode === "chars") {
+      const total = docText.replace(/\s+/g, " ").trim().length;
+      return selText
+        ? `${selText.length.toLocaleString()} of ${total.toLocaleString()} characters`
+        : `${total.toLocaleString()} characters`;
+    }
+    if (countMode === "charsNoSpaces") {
+      const strip = (t) => t.replace(/\s/g, "").length;
+      return selText
+        ? `${strip(selText).toLocaleString()} of ${strip(docText).toLocaleString()} characters (no spaces)`
+        : `${strip(docText).toLocaleString()} characters (no spaces)`;
+    }
+    return selText
+      ? `${wordsIn(selText).toLocaleString()} of ${wordsIn(docText).toLocaleString()} words`
+      : `${wordsIn(docText).toLocaleString()} words`;
+  })();
+
+  const jumpToHeading = (item) => {
+    if (!editor) return;
+    const dom = editor.view.nodeDOM(item.pos);
+    if (dom instanceof HTMLElement) dom.scrollIntoView({ behavior: "smooth", block: "start" });
+    editor.chain().focus().setTextSelection(item.pos + 1).run();
+  };
+
   /* ------------------------------ drag & drop ------------------------------ */
 
   const onDrop = (e) => {
@@ -254,9 +561,23 @@ export default function EditorPane() {
   };
 
   return (
-    <section className="flex h-full min-w-0 flex-1 flex-col gap-2.5">
+    <section
+      className="flex h-full min-w-0 flex-1 flex-col gap-2.5"
+      onKeyDownCapture={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "v") {
+          plainPasteAtRef.current = Date.now();
+        }
+      }}
+    >
       <div className={overlayActive ? "pointer-events-none opacity-60" : undefined} aria-disabled={overlayActive}>
-        <Toolbar editor={editor} />
+        <Toolbar
+          editor={editor}
+          findOpen={findOpen}
+          onToggleFind={() => {
+            setFindOpen((o) => !o);
+            setFindNonce((n) => n + 1);
+          }}
+        />
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-[5px] border-[1.5px] border-frame bg-parchment">
@@ -289,6 +610,39 @@ export default function EditorPane() {
             </div>
           </div>
         </div>
+
+        {editor && findOpen && !overlayActive && (
+          <FindReplacePanel editor={editor} focusNonce={findNonce} onClose={() => setFindOpen(false)} />
+        )}
+
+        {editor && !overlayActive && !showDropzone && (
+          <button
+            onClick={() => setOutlineOpen((o) => !o)}
+            title="Outline"
+            aria-label="Toggle outline"
+            aria-pressed={outlineOpen}
+            className={`absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-md border-[1.5px] border-frame shadow-card transition-colors ${
+              outlineOpen ? "bg-accent-soft text-accent-deep" : "bg-paper text-ink-soft hover:bg-cream"
+            }`}
+          >
+            <ListTree size={16} strokeWidth={2} />
+          </button>
+        )}
+        {editor && outlineOpen && !overlayActive && !showDropzone && (
+          <OutlinePanel editor={editor} tick={tick} onNavigate={jumpToHeading} />
+        )}
+
+        {editor && !isEmpty && !overlayActive && (
+          <button
+            onClick={() =>
+              setCountMode((m) => (m === "words" ? "chars" : m === "chars" ? "charsNoSpaces" : "words"))
+            }
+            title="Click to switch between words and characters"
+            className="absolute bottom-4 left-4 rounded-md border-[1.5px] border-frame bg-paper px-2.5 py-1.5 text-[12px] font-medium text-ink-soft shadow-card transition-colors hover:bg-cream"
+          >
+            {countLabel}
+          </button>
+        )}
 
         {showDropzone && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">

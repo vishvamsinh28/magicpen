@@ -209,6 +209,96 @@ body {
   margin: 1.6em 0;
 }
 
+/* ----------------------------- Checklists -------------------------------- */
+
+.tiptap ul[data-type="taskList"],
+.diff-doc ul[data-type="taskList"],
+.diff-preview ul[data-type="taskList"],
+.doc-preview ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.1em;
+}
+.tiptap ul[data-type="taskList"] li,
+.diff-doc ul[data-type="taskList"] li,
+.diff-preview ul[data-type="taskList"] li {
+  display: flex;
+  gap: 0.55em;
+}
+.tiptap ul[data-type="taskList"] li > label {
+  flex: 0 0 auto;
+  margin-top: 0.32em;
+  user-select: none;
+}
+.tiptap ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.tiptap ul[data-type="taskList"] input[type="checkbox"] {
+  width: 1em;
+  height: 1em;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+/* read-only renders (previews, print) — checkboxes are display only */
+.diff-doc input[type="checkbox"],
+.diff-preview input[type="checkbox"],
+.doc-preview input[type="checkbox"],
+.print-sheet input[type="checkbox"] {
+  accent-color: var(--color-accent);
+  pointer-events: none;
+}
+
+/* ----------------------------- Page breaks -------------------------------- */
+/* In the editor the node renders with data-page-break (a labeled dashed rule).
+   Saved html keeps only style="page-break-after: always", which print honors. */
+
+.doc-editor .tiptap div[data-page-break] {
+  position: relative;
+  height: 1.1em;
+  margin: 1.3em -20px;
+  border-top: 2px dashed #d8d4c8;
+  cursor: default;
+}
+.doc-editor .tiptap div[data-page-break]::after {
+  content: "Page break";
+  position: absolute;
+  top: -0.75em;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.05em 0.6em;
+  border-radius: 999px;
+  background: var(--color-cream);
+  border: 1px solid var(--color-line);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+}
+.doc-editor .tiptap div[data-page-break].ProseMirror-selectednode {
+  outline: 2px solid var(--color-accent);
+  border-radius: 3px;
+}
+.print-sheet .tiptap div[style*="page-break-after"],
+.print-sheet .tiptap div[data-page-break] {
+  height: 0;
+  margin: 0;
+  border: none;
+}
+.print-sheet .tiptap div[data-page-break]::after {
+  content: none;
+}
+
+/* ---------------------------- Find & replace ------------------------------ */
+
+.tiptap .sd-search-hit {
+  background: rgba(253, 224, 71, 0.55);
+  border-radius: 2px;
+}
+.tiptap .sd-search-hit-active {
+  background: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 0 1.5px #d97706;
+}
+
 /* ------------------------ In-document review preview ---------------------- */
 /* While a proposed change awaits review, the page shows it as marks:
    word-level <ins>/<del> inside edited blocks, whole added/removed blocks

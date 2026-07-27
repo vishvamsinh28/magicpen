@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useEditorState } from "@tiptap/react";
 import {
   Undo2, Redo2, Bold, Italic, Underline, Strikethrough,
@@ -9,12 +9,67 @@ import {
   Quote, Code2, Minus as MinusIcon, Table as TableIcon,
   Link as LinkIcon, Unlink, AlignLeft, AlignCenter, AlignRight,
   RemoveFormatting, Rows3, Columns3, Trash2,
+  Image as ImageIcon, ListChecks, SeparatorHorizontal, Search,
 } from "lucide-react";
+import { useWorkspace } from "@/components/workspace-context";
 import Dropdown from "@/components/ui/Dropdown";
 import PromptDialog from "@/components/ui/PromptDialog";
 
 const FONT_SIZES = ["Default", "10", "12", "14", "16", "18", "20", "24", "28", "32"];
 const SPACINGS = ["Default", "1.0", "1.15", "1.5", "2.0", "2.5", "3.0"];
+
+const FONTS = [
+  { label: "Default", value: null },
+  { label: "Arial", value: "Arial, Helvetica, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: "'Times New Roman', Times, serif" },
+  { label: "Garamond", value: "Garamond, 'Times New Roman', serif" },
+  { label: "Verdana", value: "Verdana, Geneva, sans-serif" },
+  { label: "Courier New", value: "'Courier New', Courier, monospace" },
+];
+
+// Display name for whatever font-family string is on the selection.
+const fontLabel = (value) => {
+  if (!value) return "Default";
+  const first = value.split(",")[0].replace(/['"]/g, "").trim();
+  return first || "Default";
+};
+
+const IMAGE_WIDTHS = [
+  { label: "Original", value: null },
+  { label: "25%", value: "25%" },
+  { label: "50%", value: "50%" },
+  { label: "75%", value: "75%" },
+  { label: "Full width", value: "100%" },
+];
+
+// Read + downscale an image for inline embedding (base64 in the doc). Large
+// photos get capped at 1600px wide; PNGs stay PNG so transparency survives.
+async function fileToInsertableSrc(file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Couldn't read that image."));
+    reader.readAsDataURL(file);
+  });
+  if (file.type === "image/gif") return dataUrl; // canvas would lose animation
+
+  const img = await new Promise((resolve, reject) => {
+    const el = new window.Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("That file doesn't look like an image."));
+    el.src = dataUrl;
+  });
+  const MAX_WIDTH = 1600;
+  const scale = Math.min(1, MAX_WIDTH / (img.naturalWidth || MAX_WIDTH));
+  if (scale === 1 && file.size < 500 * 1024) return dataUrl;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL(file.type === "image/png" ? "image/png" : "image/jpeg", 0.87);
+}
 
 const TEXT_COLORS = [
   { label: "Default", value: null },
@@ -95,9 +150,11 @@ function Swatches({ title, colors, current, onPick }) {
   );
 }
 
-export default function Toolbar({ editor }) {
+export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
+  const ws = useWorkspace();
   // null = closed; otherwise the link href being edited ("" for a new link).
   const [linkDraft, setLinkDraft] = useState(null);
+  const imageInputRef = useRef(null);
   const s = useEditorState({
     editor,
     selector: ({ editor: ed }) =>
@@ -107,6 +164,9 @@ export default function Toolbar({ editor }) {
             italic: ed.isActive("italic"),
             underline: ed.isActive("underline"),
             strike: ed.isActive("strike"),
+            fontFamily: ed.getAttributes("textStyle").fontFamily || null,
+            imageSelected: ed.isActive("image"),
+            imageWidth: ed.getAttributes("image").width || null,
             fontSize: ed.getAttributes("textStyle").fontSize || null,
             lineHeight:
               ed.getAttributes("paragraph").lineHeight ||
@@ -115,6 +175,7 @@ export default function Toolbar({ editor }) {
             color: ed.getAttributes("textStyle").color || null,
             highlight: ed.getAttributes("highlight").color || null,
             inTable: ed.isActive("table"),
+            inTaskList: ed.isActive("taskList"),
             inLink: ed.isActive("link"),
             canUndo: ed.can().undo(),
             canRedo: ed.can().redo(),
@@ -140,9 +201,16 @@ export default function Toolbar({ editor }) {
         "divider",
         { label: "Bullet list", icon: <List size={15} />, onSelect: run((c) => c.toggleBulletList()) },
         { label: "Numbered list", icon: <ListOrdered size={15} />, onSelect: run((c) => c.toggleOrderedList()) },
+        { label: "Checklist", icon: <ListChecks size={15} />, active: s?.inTaskList, onSelect: run((c) => c.toggleTaskList()) },
         { label: "Blockquote", icon: <Quote size={15} />, onSelect: run((c) => c.toggleBlockquote()) },
         { label: "Code block", icon: <Code2 size={15} />, onSelect: run((c) => c.toggleCodeBlock()) },
         { label: "Divider line", icon: <MinusIcon size={15} />, onSelect: run((c) => c.setHorizontalRule()) },
+        {
+          label: "Page break",
+          desc: "Starts a new page when printed or saved as PDF",
+          icon: <SeparatorHorizontal size={15} />,
+          onSelect: run((c) => c.insertPageBreak()),
+        },
         "divider",
         { label: "Align left", icon: <AlignLeft size={15} />, onSelect: run((c) => c.setTextAlign("left")) },
         { label: "Align center", icon: <AlignCenter size={15} />, onSelect: run((c) => c.setTextAlign("center")) },
@@ -184,6 +252,19 @@ export default function Toolbar({ editor }) {
       </ToolButton>
 
       <div className="mx-1.5 h-5 w-px shrink-0 bg-line" />
+
+      <LabeledDropdown
+        label="Font"
+        value={fontLabel(s?.fontFamily)}
+        items={FONTS.map((font) => ({
+          label: font.label,
+          active: font.value ? fontLabel(s?.fontFamily) === font.label : !s?.fontFamily,
+          onSelect: () =>
+            font.value
+              ? editor?.chain().focus().setFontFamily(font.value).run()
+              : editor?.chain().focus().unsetFontFamily().run(),
+        }))}
+      />
 
       <LabeledDropdown
         label="Size"
@@ -267,6 +348,26 @@ export default function Toolbar({ editor }) {
         )}
       </Dropdown>
 
+      <ToolButton label="Insert image" onClick={() => imageInputRef.current?.click()}>
+        <ImageIcon size={16} strokeWidth={2} />
+      </ToolButton>
+
+      {s?.imageSelected && (
+        <LabeledDropdown
+          label="Image"
+          value={IMAGE_WIDTHS.find((w) => w.value === s.imageWidth)?.label || s.imageWidth || "Original"}
+          items={IMAGE_WIDTHS.map((w) => ({
+            label: w.label,
+            active: s.imageWidth === w.value || (!s.imageWidth && !w.value),
+            onSelect: () => editor?.chain().focus().updateAttributes("image", { width: w.value }).run(),
+          }))}
+        />
+      )}
+
+      <ToolButton label="Find & replace (Ctrl+F)" active={findOpen} onClick={onToggleFind}>
+        <Search size={16} strokeWidth={2.1} />
+      </ToolButton>
+
       <Dropdown
         align="right"
         trigger={
@@ -276,6 +377,28 @@ export default function Toolbar({ editor }) {
         }
         items={moreItems}
         menuClassName="max-h-80 overflow-y-auto"
+      />
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file || !editor) return;
+          if (file.size > 8 * 1024 * 1024) {
+            ws.showToast("Images up to 8 MB are supported.");
+            return;
+          }
+          try {
+            const src = await fileToInsertableSrc(file);
+            editor.chain().focus().setImage({ src, alt: file.name.replace(/\.[a-z0-9]+$/i, "") }).run();
+          } catch (err) {
+            ws.showToast(err.message || "Couldn't insert that image.");
+          }
+        }}
       />
 
       <PromptDialog

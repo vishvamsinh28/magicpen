@@ -7,7 +7,25 @@ import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
 import { TableKit } from "@tiptap/extension-table";
+import { TaskList, TaskItem } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extensions";
+import PageBreak from "./PageBreak";
+import { SearchHighlight } from "./search";
+
+// The toolbar's image-size options set a width attribute (a percentage), which
+// the sanitizer keeps — style-based widths would be stripped on save.
+const SizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("width"),
+        renderHTML: (attributes) => (attributes.width ? { width: attributes.width } : {}),
+      },
+    };
+  },
+});
 
 // Paragraph-level line spacing (the toolbar "Spacing" control). With a text
 // selection it applies to the selected blocks; with just a cursor it applies
@@ -110,10 +128,14 @@ export function createExtensions() {
     TailSpan,
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ["heading", "paragraph", "listItem", "blockquote"] }),
-    Image.configure({ allowBase64: true }),
+    SizableImage.configure({ allowBase64: true }),
     TableKit.configure({
       table: { resizable: true },
     }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    PageBreak,
+    SearchHighlight,
     Placeholder.configure({
       placeholder: "Start writing, paste content, or ask the assistant…",
       showOnlyWhenEditable: true,

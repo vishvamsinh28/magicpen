@@ -18,6 +18,9 @@ const STYLE_PROPS = {
   "text-decoration-line": [/^(none|underline|line-through|underline line-through|line-through underline)$/],
   // right-aligned tail on the same line (resume-style "company ↔ location" rows)
   float: [/^right$/],
+  // manual page breaks — honored by the print/PDF path
+  "page-break-after": [/^always$/],
+  "break-after": [/^page$/],
 };
 
 // Exported so the AI layer can detect (and retry) styles that would be stripped.
@@ -33,6 +36,8 @@ const OPTIONS = {
     "a", "img",
     "table", "thead", "tbody", "tfoot", "tr", "th", "td", "colgroup", "col",
     "figure", "figcaption",
+    // checklists (TipTap task lists): <ul data-type="taskList"><li data-checked><label><input …
+    "label", "input",
   ],
   allowedAttributes: {
     "*": ["style"],
@@ -41,6 +46,9 @@ const OPTIONS = {
     th: ["colspan", "rowspan", "style"],
     td: ["colspan", "rowspan", "style"],
     ol: ["start", "type", "style"],
+    ul: ["data-type", "style"],
+    li: ["data-type", "data-checked", "style"],
+    input: [{ name: "type", values: ["checkbox"] }, "checked", "disabled"],
   },
   allowedStyles: { "*": STYLE_PROPS },
   allowedSchemes: ["http", "https", "mailto", "data"],
