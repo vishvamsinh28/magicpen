@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { apiFetch, deriveTitleFromHtml, downloadBlob } from "@/lib/client-utils";
-import { htmlToBlocks, applyOpsToHtml, isHtmlEmpty } from "@/components/editor/blocks";
+import { htmlToBlocks, applyOpsToHtml, isHtmlEmpty, describeOps } from "@/components/editor/blocks";
 
 const WorkspaceContext = createContext(null);
 export const useWorkspace = () => useContext(WorkspaceContext);
@@ -35,6 +35,9 @@ export function WorkspaceProvider({ user, children }) {
   const [sending, setSending] = useState(false);
   const [scope, setScope] = useState("document"); // 'document' | 'cross'
   const [pendingChange, setPendingChange] = useState(null);
+  // Indices into pendingChange.edits the user unchecked during review.
+  // Shared state: drives both the chat card and the in-document preview.
+  const [pendingDeselected, setPendingDeselected] = useState(() => new Set());
 
   /* --------------------------------- ui ---------------------------------- */
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -282,11 +285,20 @@ export function WorkspaceProvider({ user, children }) {
     } catch {}
   };
 
-  const applyEdits = async ({ edits, summary, chatId: sourceChatId, newTitle }) => {
-    let docId = activeDocId;
+  // `docId` pins the edit to the document it was proposed for — without it the
+  // edit lands on whatever tab is active (wrong after a mid-review tab switch).
+  const applyEdits = async ({ edits, summary, chatId: sourceChatId, newTitle, docId: targetDocId }) => {
+    let docId = targetDocId !== undefined ? targetDocId : activeDocId;
+    const onActive = docId === activeDocId;
     const beforeHtml = docId
-      ? (editorApiRef.current?.getHTML() ?? docHtmlRef.current.get(docId) ?? "")
+      ? onActive
+        ? (editorApiRef.current?.getHTML() ?? docHtmlRef.current.get(docId) ?? "")
+        : (docHtmlRef.current.get(docId) ?? "")
       : "";
+    if (docId && !onActive && !docHtmlRef.current.has(docId)) {
+      showToast("Open that document again to apply this change.");
+      return false;
+    }
     const afterHtml = applyOpsToHtml(beforeHtml, edits);
 
     try {
@@ -301,15 +313,18 @@ export function WorkspaceProvider({ user, children }) {
         addTab(document);
         setActiveDocId(docId);
       } else {
-        editorApiRef.current?.setContent(afterHtml);
-        // What the editor actually renders is the truth — if it matches the
-        // original, the "edit" was invisible and we say so instead of lying.
-        const appliedHtml = editorApiRef.current?.getHTML() ?? afterHtml;
-        if (edits.length && appliedHtml === beforeHtml) {
-          showToast(
-            "Those changes couldn't be applied — the formatting isn't supported. Try phrasing the request differently."
-          );
-          return false;
+        let appliedHtml = afterHtml;
+        if (onActive) {
+          editorApiRef.current?.setContent(afterHtml);
+          // What the editor actually renders is the truth — if it matches the
+          // original, the "edit" was invisible and we say so instead of lying.
+          appliedHtml = editorApiRef.current?.getHTML() ?? afterHtml;
+          if (edits.length && appliedHtml === beforeHtml) {
+            showToast(
+              "Those changes couldn't be applied — the formatting isn't supported. Try phrasing the request differently."
+            );
+            return false;
+          }
         }
         docHtmlRef.current.set(docId, appliedHtml);
         const patch = { contentHtml: appliedHtml };
@@ -320,14 +335,14 @@ export function WorkspaceProvider({ user, children }) {
         await apiFetch(`/api/documents/${docId}`, { method: "PATCH", body: JSON.stringify(patch) });
       }
       setDocsVersion((v) => v + 1);
-      setMobilePane("editor");
+      if (onActive) setMobilePane("editor");
       await recordChange({
         documentId: docId,
         chatId: sourceChatId || null,
         summary: summary || "AI edit",
         ops: edits,
         beforeHtml,
-        afterHtml: editorApiRef.current?.getHTML() ?? afterHtml,
+        afterHtml: onActive ? (editorApiRef.current?.getHTML() ?? afterHtml) : afterHtml,
         status: "applied",
       });
       return true;
@@ -390,18 +405,23 @@ export function WorkspaceProvider({ user, children }) {
           summary: assistant.editSummary,
           chatId: resp.chat.id,
           newTitle: resp.docTitle,
+          docId,
         });
         markMessage(assistant.id, { appliedStatus: ok ? "applied" : "failed" });
       } else if (hasEdits) {
         assistant.appliedStatus = "pending";
         setMessages((prev) => [...prev, assistant]);
+        setPendingDeselected(new Set());
         setPendingChange({
           messageId: assistant.id,
           edits: assistant.edits,
           summary: assistant.editSummary,
           chatId: resp.chat.id,
           newTitle: resp.docTitle,
+          docId,
         });
+        // The proposal renders on the document itself — surface it on mobile.
+        setMobilePane("editor");
       } else {
         setMessages((prev) => [...prev, assistant]);
         if (resp.docTitle && docId) renameDocument(docId, resp.docTitle);
@@ -422,18 +442,46 @@ export function WorkspaceProvider({ user, children }) {
     }
   };
 
+  const togglePendingEdit = (i) =>
+    setPendingDeselected((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+
+  const setPendingSelectAll = (selectAll, count) =>
+    setPendingDeselected(selectAll ? new Set() : new Set(Array.from({ length: count }, (_, i) => i)));
+
+  // Apply the reviewed change, minus whatever the user unchecked.
   const approvePendingChange = async () => {
     if (!pendingChange) return;
-    const ok = await applyEdits(pendingChange);
-    markMessage(pendingChange.messageId, { appliedStatus: ok ? "applied" : "failed" });
+    const all = pendingChange.edits || [];
+    const edits = all.filter((_, i) => !pendingDeselected.has(i));
+    if (!edits.length) return;
+    const partial = edits.length < all.length;
+    // On a partial apply the AI's summary describes ops that were skipped —
+    // relabel from the subset that actually lands.
+    const summary = partial
+      ? `${[...new Set(describeOps(edits).map((d) => d.label))].join(" · ")} (${edits.length} of ${all.length} edits)`
+      : pendingChange.summary;
+    const ok = await applyEdits({ ...pendingChange, edits, summary });
+    markMessage(pendingChange.messageId, {
+      appliedStatus: ok ? (partial ? "partial" : "applied") : "failed",
+      appliedInfo: ok && partial ? { applied: edits.length, total: all.length } : null,
+    });
     setPendingChange(null);
+    setPendingDeselected(new Set());
   };
 
   const rejectPendingChange = async () => {
     if (!pendingChange) return;
-    const docId = activeDocId;
+    const docId = pendingChange.docId ?? activeDocId;
     if (docId) {
-      const current = editorApiRef.current?.getHTML() ?? docHtmlRef.current.get(docId) ?? "";
+      const current =
+        docId === activeDocId
+          ? (editorApiRef.current?.getHTML() ?? docHtmlRef.current.get(docId) ?? "")
+          : (docHtmlRef.current.get(docId) ?? "");
       await recordChange({
         documentId: docId,
         chatId: pendingChange.chatId,
@@ -446,6 +494,7 @@ export function WorkspaceProvider({ user, children }) {
     }
     markMessage(pendingChange.messageId, { appliedStatus: "rejected" });
     setPendingChange(null);
+    setPendingDeselected(new Set());
   };
 
   const newConversation = () => {
@@ -553,6 +602,7 @@ export function WorkspaceProvider({ user, children }) {
     closeDocument, renameDocument, deleteDocument, onEditorUpdate,
     // chat
     chatId, chatTitle, messages, sending, scope, setScope, pendingChange,
+    pendingDeselected, togglePendingEdit, setPendingSelectAll,
     sendMessage, approvePendingChange, rejectPendingChange, newConversation, loadChat, deleteChat,
     // changes
     changesVersion, restoreChange, applyEdits,

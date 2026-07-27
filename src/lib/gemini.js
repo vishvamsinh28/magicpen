@@ -289,6 +289,19 @@ function mockAssistant({ message, blocks }) {
   if (blocks.length && /delete (the )?last/.test(m)) {
     return { reply: "Removed the last block.", title: null, edits: [{ op: "delete", index: blocks.length - 1 }] };
   }
+  // Multi-op response — exercises the review card's per-edit diffs + selective apply.
+  if (blocks.length && /(improve|polish|rewrite)/.test(m)) {
+    const idx = Math.min(1, blocks.length - 1);
+    return {
+      reply: "I've polished the document — reworded a paragraph, added a pro tip, and trimmed the ending.",
+      title: null,
+      edits: [
+        { op: "replace", index: idx, html: `<p>Put simply, ${inner(blocks[idx]).replace(/\bthe\b/i, "this")} That's the core idea.</p>` },
+        { op: "insertAfter", index: idx, html: "<p><em>Pro tip:</em> keep every section focused on a single idea.</p>" },
+        { op: "delete", index: blocks.length - 1 },
+      ],
+    };
+  }
   return {
     reply: `Mock AI here — I received "${message}". Set GEMINI_API_KEY in .env.local (and remove MOCK_AI) to talk to the real model.`,
     title: null,

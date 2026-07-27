@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { History, MessageSquare, RotateCcw, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { History, MessageSquare, RotateCcw, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import DiffList from "@/components/DiffView";
 import { apiFetch, timeAgo } from "@/lib/client-utils";
+import { buildDiffItems } from "@/lib/diff";
 
 const STATUS_STYLES = {
   applied: "bg-[#e8f3ec] text-good",
@@ -13,6 +15,18 @@ const STATUS_STYLES = {
   pending: "bg-amber-50 text-amber-700",
 };
 
+// The recorded ops replayed against the document as it was before the change —
+// the same diff the review card showed at proposal time.
+function ChangeDiff({ change }) {
+  const items = useMemo(() => buildDiffItems(change.ops, change.beforeHtml), [change]);
+  if (!items.length) return null;
+  return (
+    <div className="mt-2.5 border-t border-line pt-2.5">
+      <DiffList items={items} />
+    </div>
+  );
+}
+
 export default function ChangesPanel() {
   const ws = useWorkspace();
   const { activeDoc, activeDocId, changesVersion } = ws;
@@ -20,6 +34,7 @@ export default function ChangesPanel() {
   const [loading, setLoading] = useState(false);
   const [confirmChange, setConfirmChange] = useState(null);
   const [restoring, setRestoring] = useState(false);
+  const [openDiffId, setOpenDiffId] = useState(null);
 
   useEffect(() => {
     if (!activeDocId) {
@@ -88,16 +103,28 @@ export default function ChangesPanel() {
                 {timeAgo(change.createdAt)}
                 {change.ops?.length > 0 && ` · ${change.ops.length} operation${change.ops.length > 1 ? "s" : ""}`}
               </p>
-              {change.status !== "rejected" && change.beforeHtml != null && (
-                <button
-                  onClick={() => setConfirmChange(change)}
-                  className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
-                >
-                  <RotateCcw size={11} />
-                  Restore
-                </button>
-              )}
+              <div className="flex items-center gap-1.5">
+                {change.ops?.length > 0 && change.beforeHtml != null && (
+                  <button
+                    onClick={() => setOpenDiffId(openDiffId === change.id ? null : change.id)}
+                    className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                  >
+                    {openDiffId === change.id ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                    {openDiffId === change.id ? "Hide diff" : "View diff"}
+                  </button>
+                )}
+                {change.status !== "rejected" && change.beforeHtml != null && (
+                  <button
+                    onClick={() => setConfirmChange(change)}
+                    className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                  >
+                    <RotateCcw size={11} />
+                    Restore
+                  </button>
+                )}
+              </div>
             </div>
+            {openDiffId === change.id && <ChangeDiff change={change} />}
           </div>
         ))}
       </div>

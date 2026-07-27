@@ -209,6 +209,59 @@ body {
   margin: 1.6em 0;
 }
 
+/* ------------------------ In-document review preview ---------------------- */
+/* While a proposed change awaits review, the page shows it as marks:
+   word-level <ins>/<del> inside edited blocks, whole added/removed blocks
+   wrapped in .diff-added / .diff-removed. */
+
+.diff-doc ins {
+  background: #e3f1e8;
+  color: var(--color-good);
+  text-decoration: none;
+  border-radius: 3px;
+  padding: 0.04em 0.12em;
+}
+.diff-doc del {
+  background: #fdeeee;
+  color: #b91c1c;
+  text-decoration: line-through;
+  text-decoration-color: #f0a3a3;
+  border-radius: 3px;
+  padding: 0.04em 0.12em;
+}
+.diff-doc ins img {
+  outline: 2px solid #7cb896;
+  outline-offset: 1px;
+}
+.diff-doc del img {
+  outline: 2px solid #ef9a9a;
+  outline-offset: 1px;
+  opacity: 0.55;
+}
+.diff-doc .diff-added {
+  border-left: 3px solid #7cb896;
+  background: #f2faf5;
+  border-radius: 4px;
+  padding: 0.4em 0.75em;
+}
+.diff-doc .diff-removed {
+  border-left: 3px solid #ef9a9a;
+  background: #fdf3f3;
+  border-radius: 4px;
+  padding: 0.4em 0.75em;
+  opacity: 0.85;
+  text-decoration: line-through;
+  text-decoration-color: rgba(185, 28, 28, 0.4);
+}
+.diff-doc .diff-added > :first-child,
+.diff-doc .diff-removed > :first-child {
+  margin-top: 0;
+}
+.diff-doc .diff-added > * + *,
+.diff-doc .diff-removed > * + * {
+  margin-top: 0.85em;
+}
+
 .doc-editor .tiptap table {
   border-collapse: collapse;
   width: 100%;
@@ -278,6 +331,24 @@ body {
 .doc-preview th, .doc-preview td { border: 1px solid #cfccc0; padding: 4px 6px; }
 .doc-preview mark { background: #fef08a; }
 .doc-preview img { max-width: 100%; height: auto; }
+
+/* Rendered-HTML previews inside change-review diff cards */
+.diff-preview {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-ink);
+}
+.diff-preview h1 { font-size: 1.35em; font-weight: 700; margin: 0.3em 0; }
+.diff-preview h2 { font-size: 1.2em; font-weight: 700; margin: 0.3em 0; }
+.diff-preview h3 { font-size: 1.05em; font-weight: 600; margin: 0.25em 0; }
+.diff-preview p, .diff-preview li { margin: 0.25em 0; }
+.diff-preview ul { padding-left: 1.3em; list-style: disc; }
+.diff-preview ol { padding-left: 1.3em; list-style: decimal; }
+.diff-preview a { color: #1d63d8; text-decoration: underline; }
+.diff-preview table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
+.diff-preview th, .diff-preview td { border: 1px solid #cfccc0; padding: 3px 5px; }
+.diff-preview mark { background: #fef08a; }
+.diff-preview img { max-width: 100%; height: auto; }
 
 /* --------------------------------- Print --------------------------------- */
 /* The app shell lives in fixed-height scroll containers that browsers clip to

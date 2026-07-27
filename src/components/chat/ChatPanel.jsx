@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, ChevronDown, ChevronUp, ArrowUp, Paperclip, Shield, ShieldCheck,
   Loader2, X, Waypoints, Scale, TriangleAlert, Pencil, FilePlus2, FileMinus2,
@@ -8,7 +8,9 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import Dropdown from "@/components/ui/Dropdown";
+import DiffList from "@/components/DiffView";
 import { apiFetch } from "@/lib/client-utils";
+import { buildDiffItems } from "@/lib/diff";
 
 const MODES = {
   precise: { label: "Precise", desc: "Sticks closely to your wording" },
@@ -71,7 +73,7 @@ function WelcomeCard() {
   );
 }
 
-function EditChips({ edits, status }) {
+function EditChips({ edits, status, info }) {
   if (!edits?.length) return null;
   return (
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-line pt-2.5">
@@ -90,6 +92,12 @@ function EditChips({ edits, status }) {
       {status === "applied" && (
         <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f3ec] px-2 py-0.5 text-[11px] font-medium text-good">
           <Check size={11} strokeWidth={3} /> Applied
+        </span>
+      )}
+      {status === "partial" && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f3ec] px-2 py-0.5 text-[11px] font-medium text-good">
+          <Check size={11} strokeWidth={3} />
+          Applied {info ? `${info.applied} of ${info.total}` : "selected"}
         </span>
       )}
       {status === "pending" && (
@@ -145,7 +153,7 @@ function MessageBubble({ message }) {
   return (
     <div className="rounded-2xl border border-line bg-paper px-4 py-3 text-[13.5px] leading-relaxed text-ink shadow-card">
       <p className="whitespace-pre-wrap">{message.content}</p>
-      <EditChips edits={message.edits} status={message.appliedStatus} />
+      <EditChips edits={message.edits} status={message.appliedStatus} info={message.appliedInfo} />
     </div>
   );
 }
@@ -169,8 +177,26 @@ function TypingBubble() {
 
 function PendingChangeCard() {
   const ws = useWorkspace();
-  const { pendingChange } = ws;
+  const { pendingChange, pendingDeselected: deselected, docHtmlRef } = ws;
+
+  // Diff against the document the proposal was made for — the same html
+  // applyEdits will transform. docHtmlRef (not the editor) is the source of
+  // truth: it's current on every keystroke and safe across tab switches.
+  const items = useMemo(() => {
+    if (!pendingChange) return [];
+    const docId = pendingChange.docId ?? null;
+    const html = docId ? (docHtmlRef.current.get(docId) ?? "") : "";
+    return buildDiffItems(pendingChange.edits, html);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingChange]);
+
   if (!pendingChange) return null;
+
+  // A setDocument rewrite has no per-op mapping — it's apply-all or dismiss.
+  const selectable = items.length > 0 && items.every((it) => it.opRef);
+  const total = items.length;
+  const selectedCount = selectable ? total - deselected.size : total;
+
   return (
     <div className="sd-pop-in rounded-2xl border-[1.5px] border-accent bg-accent-soft p-3.5">
       <p className="flex items-center gap-2 text-[13.5px] font-semibold text-accent-deep">
@@ -179,19 +205,38 @@ function PendingChangeCard() {
       {pendingChange.summary && (
         <p className="mt-1 text-[12.5px] leading-relaxed text-ink-soft">{pendingChange.summary}</p>
       )}
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {pendingChange.edits.slice(0, 6).map((op, i) => (
-          <span key={i} className="inline-flex items-center gap-1 rounded-full border border-accent-faint bg-paper px-2 py-0.5 text-[11px] text-ink-soft">
-            {OP_ICONS[op.op]} {opLabel(op)}
+
+      {selectable && total > 1 && (
+        <div className="mt-2.5 flex items-center justify-between">
+          <span className="text-[11.5px] font-medium text-muted">
+            {selectedCount} of {total} selected
           </span>
-        ))}
+          <button
+            onClick={() => ws.setPendingSelectAll(deselected.size > 0, total)}
+            className="rounded-md px-1.5 py-0.5 text-[11.5px] font-medium text-accent-deep transition-colors hover:bg-accent-faint"
+          >
+            {deselected.size ? "Select all" : "Clear all"}
+          </button>
+        </div>
+      )}
+
+      <div className={`${selectable && total > 1 ? "mt-1.5" : "mt-2.5"} max-h-[45vh] overflow-y-auto pr-0.5`}>
+        <DiffList items={items} selectable={selectable} deselected={deselected} onToggle={ws.togglePendingEdit} />
       </div>
+
       <div className="mt-3 flex gap-2">
         <button
           onClick={ws.approvePendingChange}
-          className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-card transition-colors hover:bg-accent-deep"
+          disabled={!selectedCount}
+          className={`rounded-lg px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-card transition-colors ${
+            selectedCount ? "bg-accent hover:bg-accent-deep" : "cursor-default bg-accent-disabled"
+          }`}
         >
-          Apply changes
+          {selectedCount === total
+            ? total === 1
+              ? "Apply"
+              : "Apply all"
+            : `Apply ${selectedCount} selected`}
         </button>
         <button
           onClick={ws.rejectPendingChange}
@@ -410,7 +455,7 @@ export default function ChatPanel() {
             <MessageBubble key={m.id} message={m} />
           ))}
           {sending && <TypingBubble />}
-          {!sending && pendingChange && <PendingChangeCard />}
+          {!sending && pendingChange && <PendingChangeCard key={pendingChange.messageId} />}
         </div>
         <div className="shrink-0 border-t border-line" />
         <Composer />

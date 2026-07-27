@@ -1,18 +1,66 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import { FileText, Upload, Loader2, Minus, Plus } from "lucide-react";
+import { FileText, Upload, Loader2, Minus, Plus, ShieldCheck } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
+import { buildDiffPreviewHtml } from "@/lib/diff";
 import { createExtensions } from "./extensions";
 import Toolbar from "./Toolbar";
 
 const ZOOM_STEPS = [50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200];
 const ACCEPT = ".pdf,.docx,.txt,.rtf,.md,.markdown,.html,.htm";
 
+// Sticky bar shown over the document while proposed changes are previewed on
+// the page. Apply/Dismiss act on the same pending change as the chat card.
+function ReviewBar() {
+  const ws = useWorkspace();
+  const { pendingChange, pendingDeselected } = ws;
+  const total = pendingChange?.edits?.length ?? 0;
+  const selectable = !pendingChange?.edits?.some((op) => op.op === "setDocument");
+  const selectedCount = selectable ? total - pendingDeselected.size : total;
+
+  return (
+    <div className="pointer-events-none sticky top-2.5 z-10 flex justify-center px-3">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-full border-[1.5px] border-accent bg-paper py-1.5 pl-4 pr-1.5 shadow-pop">
+        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-accent-deep">
+          <ShieldCheck size={15} />
+          Reviewing changes
+        </span>
+        <span className="hidden text-[12px] text-muted sm:flex sm:items-center sm:gap-1.5">
+          {selectable && total > 1 && `${selectedCount} of ${total} selected · `}
+          <ins className="rounded-[3px] bg-[#e3f1e8] px-1 text-good no-underline">added</ins>
+          <del className="rounded-[3px] bg-red-50 px-1 text-red-700 decoration-red-400">removed</del>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <button
+            onClick={ws.approvePendingChange}
+            disabled={!selectedCount}
+            className={`rounded-full px-3.5 py-1 text-[12.5px] font-semibold text-white transition-colors ${
+              selectedCount ? "bg-accent hover:bg-accent-deep" : "cursor-default bg-accent-disabled"
+            }`}
+          >
+            {selectedCount === total
+              ? total === 1
+                ? "Apply"
+                : "Apply all"
+              : `Apply ${selectedCount}`}
+          </button>
+          <button
+            onClick={ws.rejectPendingChange}
+            className="rounded-full border border-line bg-paper px-3 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+          >
+            Dismiss
+          </button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function EditorPane() {
   const ws = useWorkspace();
-  const { activeDocId, docsVersion, docHtmlRef, editorApiRef, uploading } = ws;
+  const { activeDocId, docsVersion, docHtmlRef, editorApiRef, uploading, pendingChange, pendingDeselected } = ws;
 
   const handlersRef = useRef({});
   handlersRef.current.onEditorUpdate = ws.onEditorUpdate;
@@ -69,8 +117,22 @@ export default function EditorPane() {
     setTick((t) => t + 1);
   }, [editor, activeDocId, docsVersion, docHtmlRef]);
 
+  // Proposed changes render on the document itself while awaiting review —
+  // but only on the document they were proposed for.
+  const reviewing = !!pendingChange && (pendingChange.docId ?? null) === (activeDocId ?? null);
+  // Base comes from docHtmlRef, not the editor: on a tab switch this memo runs
+  // before the effect that loads the new doc into the editor, so the editor's
+  // html can still be the previous tab's. docHtmlRef is kept current on every
+  // keystroke and programmatic write.
+  const reviewHtml = useMemo(() => {
+    if (!reviewing) return null;
+    const base = activeDocId ? (docHtmlRef.current.get(activeDocId) ?? "") : "";
+    return buildDiffPreviewHtml(pendingChange.edits, base, pendingDeselected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewing, pendingChange, pendingDeselected, activeDocId]);
+
   const isEmpty = !editor || editor.isEmpty;
-  const showDropzone = !activeDocId && isEmpty && !uploading && !editorFocused;
+  const showDropzone = !activeDocId && isEmpty && !uploading && !editorFocused && !reviewing;
 
   /* ------------------------------ drag & drop ------------------------------ */
 
@@ -94,7 +156,9 @@ export default function EditorPane() {
 
   return (
     <section className="flex h-full min-w-0 flex-1 flex-col gap-2.5">
-      <Toolbar editor={editor} />
+      <div className={reviewing ? "pointer-events-none opacity-60" : undefined} aria-disabled={reviewing}>
+        <Toolbar editor={editor} />
+      </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-[5px] border-[1.5px] border-frame bg-parchment">
         <div
@@ -104,17 +168,25 @@ export default function EditorPane() {
           onDragOver={(e) => { if (hasFiles(e)) e.preventDefault(); }}
           onDrop={onDrop}
         >
+          {reviewing && <ReviewBar />}
           <div
             style={{ zoom: zoomValue / 100 }}
             className={`px-3 py-6 md:px-10 md:py-9 ${showDropzone ? "sd-hide-placeholder" : ""}`}
           >
             <div
-              className="doc-editor mx-auto w-[850px] max-w-full cursor-text rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px]"
+              className={`doc-editor mx-auto w-[850px] max-w-full rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px] ${
+                reviewing ? "" : "cursor-text"
+              }`}
               onClick={(e) => {
-                if (e.target === e.currentTarget) editor?.commands.focus("end");
+                if (!reviewing && e.target === e.currentTarget) editor?.commands.focus("end");
               }}
             >
-              <EditorContent editor={editor} />
+              {reviewing && reviewHtml != null && (
+                <div className="tiptap diff-doc" dangerouslySetInnerHTML={{ __html: reviewHtml }} />
+              )}
+              <div className={reviewing ? "hidden" : undefined}>
+                <EditorContent editor={editor} />
+              </div>
             </div>
           </div>
         </div>
