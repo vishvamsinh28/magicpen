@@ -1,0 +1,419 @@
+import {
+  Users, Documents, Chats, Messages, Versions, Changes, Presence,
+  SlackInstalls, SlackLinks, SlackThreads,
+} from "@/lib/store";
+import { runAssistant, summarizeEdits } from "@/lib/gemini";
+import { htmlToBlocks, applyOpsToHtml, isHtmlEmpty } from "@/lib/blocks-server";
+import { cleanDocHtml, htmlToText } from "@/lib/sanitize";
+import { parseFileToHtml, MAX_UPLOAD_BYTES, fileExtension, ACCEPTED_EXTENSIONS } from "@/lib/parse";
+import {
+  postMessage, downloadSlackFile, docUrl, connectUrl, signConnectState,
+} from "@/lib/slack";
+
+// The bot's brain: it turns a Slack message (or slash command, or button click)
+// into the same operations the web app performs — generate, edit, commit,
+// retrieve, upload — by reusing runAssistant and the store directly. Every
+// action runs AS a linked SuperDocs user; unlinked users get a connect prompt
+// and nothing else happens.
+
+/* --------------------------- identity & tokens ---------------------------- */
+
+export const botTokenForTeam = async (teamId) =>
+  (await SlackInstalls.getByTeam(teamId))?.botToken || null;
+
+// Returns the SuperDocs user linked to this Slack identity, or null.
+export async function resolveUser(teamId, slackUserId) {
+  const link = await SlackLinks.get(teamId, slackUserId);
+  if (!link?.userId) return null;
+  return Users.get(link.userId);
+}
+
+/* ------------------------------ text helpers ------------------------------ */
+
+// Slack wraps URLs as <url> or <url|label> and mentions as <@U…>. Turn a raw
+// message into plain text for the model, and separately pull out a doc id.
+function unwrapSlackText(text = "") {
+  return String(text)
+    .replace(/<@[^>]+>/g, "")
+    .replace(/<([^|>]+)\|([^>]+)>/g, "$2")
+    .replace(/<([^>]+)>/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractDocId(text = "") {
+  const byParam = String(text).match(/[?&]doc=([A-Za-z0-9-]{6,})/);
+  if (byParam) return byParam[1];
+  const uuid = String(text).match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i);
+  return uuid ? uuid[0] : null;
+}
+
+function deriveTitle(html) {
+  const text = htmlToText(html).split("\n").find((l) => l.trim());
+  return (text || "Untitled document").trim().slice(0, 80);
+}
+
+// Presence rows touched within this window count as "someone is editing live".
+const PRESENCE_ACTIVE_MS = 45_000;
+async function activeEditorCount(documentId) {
+  const rows = await Presence.list(documentId);
+  const cutoff = Date.now() - PRESENCE_ACTIVE_MS;
+  return rows.filter((r) => r.lastSeenAt && new Date(r.lastSeenAt).getTime() > cutoff).length;
+}
+
+/* ------------------------------ block builders ---------------------------- */
+
+const section = (text) => ({ type: "section", text: { type: "mrkdwn", text } });
+const context = (text) => ({ type: "context", elements: [{ type: "mrkdwn", text }] });
+
+function docActions(documentId, { undo = false } = {}) {
+  const elements = [
+    { type: "button", action_id: "sd_commit", text: { type: "plain_text", text: "💾 Commit version" }, value: JSON.stringify({ d: documentId }) },
+    { type: "button", action_id: "sd_open", text: { type: "plain_text", text: "↗ Open in SuperDocs" }, url: docUrl(documentId) },
+  ];
+  if (undo) {
+    elements.push({ type: "button", action_id: "sd_undo", style: "danger", text: { type: "plain_text", text: "↩ Undo" }, value: JSON.stringify({ d: documentId }) });
+  }
+  return { type: "actions", elements };
+}
+
+function connectBlocks(url) {
+  return {
+    text: "Connect your SuperDocs account to continue.",
+    blocks: [
+      section("👋 *Connect your SuperDocs account* to let me generate, edit, and manage your documents from Slack."),
+      { type: "actions", elements: [{ type: "button", style: "primary", action_id: "sd_connect", text: { type: "plain_text", text: "Connect SuperDocs" }, url }] },
+      context("This links your Slack identity to your SuperDocs account. You only do it once."),
+    ],
+  };
+}
+
+const say = (botToken, { channel, threadTs, text, blocks }) =>
+  postMessage(botToken, { channel, thread_ts: threadTs, text, blocks, unfurl_links: false });
+
+/* ---------------------------- connect prompting --------------------------- */
+
+export async function promptConnect({ botToken, channel, threadTs, teamId, slackUserId }) {
+  const state = await signConnectState({ teamId, slackUserId });
+  const payload = connectBlocks(connectUrl(state));
+  await say(botToken, { channel, threadTs, ...payload });
+}
+
+/* -------------------------------- upload ---------------------------------- */
+
+async function handleUpload({ user, teamId, channel, threadTs, botToken, file }) {
+  const ext = fileExtension(file.name || file.title || "");
+  if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+    await say(botToken, { channel, threadTs, text: `I can't read *.${ext || "?"}* files. Try PDF, DOCX, TXT, RTF, MD, or HTML.` });
+    return;
+  }
+  if (file.size && file.size > MAX_UPLOAD_BYTES) {
+    await say(botToken, { channel, threadTs, text: "That file is larger than 30 MB." });
+    return;
+  }
+
+  let parsed;
+  try {
+    const buffer = await downloadSlackFile(file.url_private_download || file.url_private, botToken);
+    parsed = await parseFileToHtml({ buffer, filename: file.name || `upload.${ext}` });
+  } catch (err) {
+    console.error("[superdocs/slack] upload parse failed:", err);
+    await say(botToken, { channel, threadTs, text: `Couldn't read "${file.name}". It may be corrupted or password-protected.` });
+    return;
+  }
+
+  if (isHtmlEmpty(parsed.html)) {
+    await say(botToken, { channel, threadTs, text: "I couldn't extract any content from that file." });
+    return;
+  }
+
+  const doc = await Documents.create({
+    userId: user.id,
+    title: parsed.title,
+    contentHtml: parsed.html,
+    sourceFile: { name: file.name, type: file.mimetype || null, size: file.size || null },
+  });
+  await SlackThreads.bind({ teamId, channelId: channel, threadTs, userId: user.id, documentId: doc.id, chatId: null });
+
+  await say(botToken, {
+    channel, threadTs,
+    text: `Imported *${parsed.title}*.`,
+    blocks: [
+      section(`📄 Imported *${parsed.title}* into SuperDocs.${parsed.notice ? `\n_${parsed.notice}_` : ""}`),
+      docActions(doc.id),
+      context("Reply in this thread to edit it — e.g. _\"summarize the key points at the top\"_."),
+    ],
+  });
+}
+
+/* --------------------------- main message handler ------------------------- */
+
+// Handles an @mention or DM. `files` is Slack's file array (may be empty).
+export async function handleMessage({ teamId, channel, slackUserId, text, threadTs, files, botToken }) {
+  const user = await resolveUser(teamId, slackUserId);
+  if (!user) {
+    await promptConnect({ botToken, channel, threadTs, teamId, slackUserId });
+    return;
+  }
+
+  // A shared file → import it (handle the first supported one).
+  if (files?.length) {
+    await handleUpload({ user, teamId, channel, threadTs, botToken, file: files[0] });
+    return;
+  }
+
+  const rawText = text || "";
+  const prompt = unwrapSlackText(rawText);
+  if (!prompt) {
+    await say(botToken, { channel, threadTs, text: "Tell me what to do — e.g. _\"draft a project kickoff doc\"_ or share a file to import." });
+    return;
+  }
+
+  // Resolve which document we're acting on: an explicit link wins, else the
+  // document already bound to this thread.
+  const binding = await SlackThreads.get(teamId, channel, threadTs);
+  const linkedId = extractDocId(rawText);
+  let doc = null;
+  if (linkedId) {
+    doc = await Documents.get(linkedId, user.id);
+    if (!doc) {
+      await say(botToken, { channel, threadTs, text: "I couldn't find that document under your account." });
+      return;
+    }
+  } else if (binding?.documentId) {
+    doc = await Documents.get(binding.documentId, user.id);
+  }
+
+  const chatHistory = binding?.chatId ? await Messages.list(binding.chatId) : [];
+  const blocks = doc ? htmlToBlocks(doc.contentHtml || "") : [];
+
+  let result;
+  try {
+    result = await runAssistant({
+      message: prompt,
+      blocks,
+      docTitle: doc?.title || "",
+      history: chatHistory,
+      mode: "balanced",
+    });
+  } catch (err) {
+    const msg =
+      err.code === "ai_not_configured"
+        ? "The AI isn't configured on the server yet (missing GEMINI_API_KEY)."
+        : err.code === "ai_quota"
+          ? err.message
+          : "The AI request failed — please try again.";
+    await say(botToken, { channel, threadTs, text: msg });
+    return;
+  }
+
+  // Persist the exchange as a SuperDocs chat so history + the app stay in sync.
+  let chat = binding?.chatId ? await Chats.get(binding.chatId, user.id) : null;
+
+  let replyBlocks;
+  let replyText = result.reply;
+  let boundDocId = doc?.id || null;
+
+  if (doc) {
+    // Edit path: apply ops to the existing document.
+    const beforeHtml = doc.contentHtml || "";
+    const afterHtml = result.edits.length ? cleanDocHtml(applyOpsToHtml(beforeHtml, result.edits)) : beforeHtml;
+    const changed = afterHtml !== beforeHtml;
+
+    if (changed) {
+      const patch = { contentHtml: afterHtml };
+      if (result.title) patch.title = result.title.slice(0, 200);
+      await Documents.update(doc.id, user.id, patch);
+      await Changes.add({
+        userId: user.id,
+        documentId: doc.id,
+        chatId: chat?.id || null,
+        summary: summarizeEdits(result.edits) || "Edited from Slack",
+        ops: result.edits,
+        beforeHtml,
+        afterHtml,
+        status: "applied",
+      });
+    }
+
+    const active = await activeEditorCount(doc.id);
+    replyBlocks = [
+      section(result.reply),
+      ...(changed ? [context(`✏️ ${summarizeEdits(result.edits)} · *${(result.title || doc.title)}*`)] : []),
+      docActions(doc.id, { undo: changed }),
+      ...(changed && active ? [context("⚠️ Someone has this document open — they'll see the change after a refresh.")] : []),
+    ];
+  } else {
+    // Generate path: if the model produced document content, create a new doc.
+    const generatedHtml = cleanDocHtml(applyOpsToHtml("", result.edits));
+    if (!isHtmlEmpty(generatedHtml)) {
+      const title = (result.title || deriveTitle(generatedHtml)).slice(0, 200);
+      const created = await Documents.create({ userId: user.id, title, contentHtml: generatedHtml });
+      boundDocId = created.id;
+      replyBlocks = [
+        section(result.reply),
+        context(`📄 Created *${title}*`),
+        docActions(created.id),
+        context("Reply in this thread to keep editing it."),
+      ];
+    } else {
+      // Pure question / no document context — just answer.
+      replyBlocks = [section(result.reply)];
+    }
+  }
+
+  // Ensure a chat exists and log both turns (mirrors /api/chat).
+  if (!chat) {
+    chat = await Chats.create({
+      userId: user.id,
+      title: prompt.replace(/\s+/g, " ").slice(0, 64),
+      scope: "document",
+      documentId: boundDocId,
+    });
+  }
+  await Messages.add({ chatId: chat.id, userId: user.id, role: "user", content: prompt });
+  await Messages.add({
+    chatId: chat.id, userId: user.id, role: "assistant",
+    content: result.reply,
+    edits: result.edits.length ? result.edits : null,
+    editSummary: summarizeEdits(result.edits),
+  });
+
+  // Bind the thread so follow-ups continue this document + chat.
+  await SlackThreads.bind({
+    teamId, channelId: channel, threadTs,
+    userId: user.id, documentId: boundDocId, chatId: chat.id,
+  });
+
+  await say(botToken, { channel, threadTs, text: replyText, blocks: replyBlocks });
+}
+
+/* ------------------------------- button acks ------------------------------ */
+
+// Handles Block Kit button clicks (commit / undo). Returns a short status
+// string the route posts back; identity is re-resolved for safety.
+export async function handleButton({ teamId, slackUserId, channel, threadTs, botToken, actionId, value }) {
+  // URL buttons (Open / Connect) navigate on their own — nothing to do server-side.
+  if (actionId !== "sd_commit" && actionId !== "sd_undo") return;
+
+  const user = await resolveUser(teamId, slackUserId);
+  if (!user) {
+    await promptConnect({ botToken, channel, threadTs, teamId, slackUserId });
+    return;
+  }
+  const { d: documentId } = safeParse(value);
+  if (!documentId) return;
+  const doc = await Documents.get(documentId, user.id);
+  if (!doc) {
+    await say(botToken, { channel, threadTs, text: "That document is no longer available." });
+    return;
+  }
+
+  if (actionId === "sd_commit") {
+    const count = (await Versions.list(documentId, user.id)).length;
+    const label = `Committed from Slack · ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
+    await Versions.add({ userId: user.id, documentId, label, contentHtml: doc.contentHtml || "" });
+    await say(botToken, { channel, threadTs, text: `💾 Committed version ${count + 1} of *${doc.title}*.` });
+    return;
+  }
+
+  if (actionId === "sd_undo") {
+    const last = (await Changes.list(documentId, user.id)).find((c) => c.status === "applied");
+    if (!last) {
+      await say(botToken, { channel, threadTs, text: "There's nothing to undo on this document." });
+      return;
+    }
+    await Documents.update(documentId, user.id, { contentHtml: last.beforeHtml || "" });
+    await Changes.add({
+      userId: user.id, documentId, summary: "Reverted last change (Slack)",
+      ops: [], beforeHtml: doc.contentHtml || "", afterHtml: last.beforeHtml || "", status: "restored",
+    });
+    await say(botToken, { channel, threadTs, text: `↩ Reverted the last change to *${doc.title}*.`, blocks: [
+      section(`↩ Reverted the last change to *${doc.title}*.`),
+      docActions(documentId),
+    ] });
+    return;
+  }
+}
+
+/* ----------------------------- slash commands ----------------------------- */
+
+// `/superdoc <sub> <args>` — deterministic actions that don't need a thread.
+export async function handleSlashCommand({ teamId, slackUserId, channel, botToken, text }) {
+  const user = await resolveUser(teamId, slackUserId);
+  if (!user) {
+    const state = await signConnectState({ teamId, slackUserId });
+    return connectBlocks(connectUrl(state)); // returned as the command response
+  }
+
+  const [sub, ...rest] = String(text || "").trim().split(/\s+/);
+  const arg = rest.join(" ").trim();
+
+  if (!sub || sub === "help") {
+    return {
+      text: "SuperDocs commands",
+      blocks: [section(
+        "*SuperDocs*\n" +
+        "• `/superdoc list` — your recent documents\n" +
+        "• `/superdoc open <title>` — open a document\n" +
+        "• `/superdoc new <prompt>` — draft a new document\n" +
+        "• `/superdoc commit [label]` — snapshot your most recent document\n" +
+        "Or just *@mention me* or *DM me* to generate and edit in a thread."
+      )],
+    };
+  }
+
+  if (sub === "list") {
+    const docs = (await Documents.list(user.id)).slice(0, 10);
+    if (!docs.length) return { text: "No documents yet.", blocks: [section("You don't have any documents yet. Try `/superdoc new <prompt>`.")] };
+    return {
+      text: "Your recent documents",
+      blocks: [
+        section("*Your recent documents*"),
+        ...docs.map((d) =>
+          ({ type: "section", text: { type: "mrkdwn", text: `*${d.title}*\n_updated ${new Date(d.updatedAt).toLocaleString()}_` },
+             accessory: { type: "button", action_id: "sd_open", text: { type: "plain_text", text: "Open" }, url: docUrl(d.id) } })
+        ),
+      ],
+    };
+  }
+
+  if (sub === "open") {
+    if (!arg) return { text: "Usage: /superdoc open <title>", blocks: [section("Usage: `/superdoc open <title>`")] };
+    const docs = await Documents.list(user.id);
+    const match = docs.find((d) => d.title.toLowerCase().includes(arg.toLowerCase()));
+    if (!match) return { text: "No match.", blocks: [section(`No document matching *${arg}*.`)] };
+    return { text: match.title, blocks: [section(`*${match.title}*`), docActions(match.id)] };
+  }
+
+  if (sub === "commit") {
+    const docs = await Documents.list(user.id);
+    const doc = docs[0];
+    if (!doc) return { text: "No document to commit.", blocks: [section("You don't have any documents to commit yet.")] };
+    const count = (await Versions.list(doc.id, user.id)).length;
+    const label = arg || `Committed from Slack · ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
+    await Versions.add({ userId: user.id, documentId: doc.id, label, contentHtml: doc.contentHtml || "" });
+    return { text: "Committed.", blocks: [section(`💾 Committed version ${count + 1} of *${doc.title}* — _${label}_.`), docActions(doc.id)] };
+  }
+
+  if (sub === "new") {
+    if (!arg) return { text: "Usage: /superdoc new <prompt>", blocks: [section("Usage: `/superdoc new <prompt>`")] };
+    let result;
+    try {
+      result = await runAssistant({ message: arg, blocks: [], docTitle: "", history: [], mode: "balanced" });
+    } catch (err) {
+      return { text: "AI error", blocks: [section(err.code === "ai_quota" ? err.message : "The AI request failed — please try again.")] };
+    }
+    const html = cleanDocHtml(applyOpsToHtml("", result.edits));
+    if (isHtmlEmpty(html)) return { text: result.reply, blocks: [section(result.reply)] };
+    const title = (result.title || deriveTitle(html)).slice(0, 200);
+    const doc = await Documents.create({ userId: user.id, title, contentHtml: html });
+    return { text: `Created ${title}`, blocks: [section(`📄 Created *${title}*.\n${result.reply}`), docActions(doc.id)] };
+  }
+
+  return { text: "Unknown command", blocks: [section(`Unknown command \`${sub}\`. Try \`/superdoc help\`.`)] };
+}
+
+function safeParse(s) {
+  try { return JSON.parse(s); } catch { return {}; }
+}

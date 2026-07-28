@@ -13,6 +13,7 @@ export const newId = () => randomUUID();
 const EMPTY = {
   users: [], documents: [], chats: [], messages: [], changes: [], versions: [],
   shares: [], comments: [], docstates: [], docupdates: [], presence: [],
+  slackinstalls: [], slacklinks: [], slackthreads: [],
 };
 
 /* ------------------------------ Mongo store ------------------------------ */
@@ -40,6 +41,9 @@ function mongoStore(uri) {
           d.collection("docstates").createIndex({ documentId: 1 }, { unique: true }),
           d.collection("docupdates").createIndex({ documentId: 1, seq: 1 }),
           d.collection("presence").createIndex({ documentId: 1, actorId: 1 }, { unique: true }),
+          d.collection("slackinstalls").createIndex({ teamId: 1 }, { unique: true }),
+          d.collection("slacklinks").createIndex({ teamId: 1, slackUserId: 1 }, { unique: true }),
+          d.collection("slackthreads").createIndex({ teamId: 1, channelId: 1, threadTs: 1 }, { unique: true }),
         ]).catch(() => {});
         return d;
       })();
@@ -500,4 +504,48 @@ export const Changes = {
     }),
   update: (id, userId, patch) =>
     store().update("changes", { id, userId }, { ...patch, updatedAt: now() }),
+};
+
+/* ------------------------------ Slack installs ---------------------------- */
+// One row per workspace that installed the app. Public distribution means each
+// install mints its own bot token, so inbound events look the token up by the
+// team id carried in the payload. Keyed (and uniquely indexed) on teamId.
+
+export const SlackInstalls = {
+  getByTeam: (teamId) => store().findOne("slackinstalls", { teamId }),
+  save: ({ teamId, teamName = null, botToken, botUserId = null, appId = null, authedUserId = null }) =>
+    store().upsert(
+      "slackinstalls",
+      { teamId },
+      { teamName, botToken, botUserId, appId, authedUserId, updatedAt: now() }
+    ),
+  remove: (teamId) => store().removeWhere("slackinstalls", { teamId }),
+};
+
+/* ------------------------------- Slack links ------------------------------ */
+// Maps a Slack identity (team + user) to a SuperDocs account so the bot can act
+// as that user. Written by the browser connect flow, which proves the SuperDocs
+// session before linking. Keyed (and uniquely indexed) on (teamId, slackUserId).
+
+export const SlackLinks = {
+  get: (teamId, slackUserId) => store().findOne("slacklinks", { teamId, slackUserId }),
+  link: ({ teamId, slackUserId, userId }) =>
+    store().upsert("slacklinks", { teamId, slackUserId }, { userId, updatedAt: now() }),
+  unlink: (teamId, slackUserId) => store().removeWhere("slacklinks", { teamId, slackUserId }),
+};
+
+/* ------------------------------ Slack threads ----------------------------- */
+// Binds a Slack conversation thread to a SuperDocs document + chat so follow-up
+// messages in the same thread keep operating on the same document. Keyed (and
+// uniquely indexed) on (teamId, channelId, threadTs).
+
+export const SlackThreads = {
+  get: (teamId, channelId, threadTs) =>
+    store().findOne("slackthreads", { teamId, channelId, threadTs }),
+  bind: ({ teamId, channelId, threadTs, userId, documentId, chatId }) =>
+    store().upsert(
+      "slackthreads",
+      { teamId, channelId, threadTs },
+      { userId, documentId, chatId, updatedAt: now() }
+    ),
 };

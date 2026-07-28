@@ -82,13 +82,21 @@ export function WorkspaceProvider({ user, children }) {
     } catch {}
     // Restore this user's previously open tabs.
     (async () => {
+      // Deep link (e.g. the Slack bot's "Open in SuperDocs" → /app?doc=<id>).
+      const deepLinkId = new URLSearchParams(window.location.search).get("doc");
+      if (deepLinkId) {
+        const p = new URLSearchParams(window.location.search);
+        p.delete("doc");
+        const qs = p.toString();
+        window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+      }
       try {
         const tabs = JSON.parse(
           localStorage.getItem(`superdocs-tabs:${user.id}`) || "null"
         );
-        if (!tabs?.ids?.length) return;
+        const restoreIds = tabs?.ids?.length ? tabs.ids.slice(0, 8) : [];
         const restored = [];
-        for (const id of tabs.ids.slice(0, 8)) {
+        for (const id of restoreIds) {
           try {
             const { document } = await apiFetch(`/api/documents/${id}`);
             docHtmlRef.current.set(document.id, document.contentHtml || "");
@@ -107,6 +115,8 @@ export function WorkspaceProvider({ user, children }) {
           setMobilePane("editor");
         }
       } catch {}
+      // Deep link wins: open (and focus) the requested document last.
+      if (deepLinkId) await openDocument(deepLinkId);
     })();
   }, []);
 
