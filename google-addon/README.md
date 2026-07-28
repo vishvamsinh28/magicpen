@@ -97,3 +97,20 @@ account (stored server-side in `GoogleLinks`). After that, edits just work.
   `Documents`/`Chat` record, mirroring the Slack thread model.
 - Replacing a selection that spans list items or table cells falls back to plain
   paragraphs.
+
+## Troubleshooting
+
+**"We're sorry, a server error occurred while reading from storage. Error code
+PERMISSION_DENIED."** — This is a **multi-account** problem, not a backend one.
+If you're signed into several Google accounts in one browser, Docs can render
+under a different account (`authuser`) than the one that installed the add-on, so
+Apps Script refuses to read the add-on's own Script Properties. Fix: run the
+add-on and open the Doc under a **single, consistent Google account** — easiest
+in an **Incognito window** (or a dedicated Chrome profile) signed into only that
+account. This is the #1 gotcha when sharing with teammates who juggle accounts.
+
+**Errors are stage-tagged.** Any failure the sidebar shows starts with a bracket
+— `[identity]`, `[config]`, `[read-doc]`, `[backend]`, or `[apply]` — telling you
+which step broke (`runAssist` in `Code.gs`). `[config]` = Script Properties (the
+account issue above); `[read-doc]` = the document itself (tabs / view-only
+access); `[backend]` = the call actually reached SuperDocs.
