@@ -79,6 +79,6 @@ export async function POST(request) {
     "Connected",
     "✅ Connected",
     `<p><strong>${escapeHtml(user.email || "Your account")}</strong> is now linked to Slack.</p>` +
-      `<p>Head back to Slack and start creating — try <em>"draft a project kickoff doc"</em>.</p>`
+      `<p>Head back to Slack and start creating — try <code>/superdoc new my-doc</code>, then reply in the thread.</p>`
   );
 }

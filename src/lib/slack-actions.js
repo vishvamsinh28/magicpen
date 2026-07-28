@@ -588,8 +588,9 @@ export async function clearConversation({ teamId, channel, botToken, responseUrl
 // `/superdoc <sub>` for list / open / commit / help. Returns a payload the route
 // sends as an ephemeral reply. (`new` is handled by createDocFromSlash.)
 export async function handleSlashCommand({ teamId, slackUserId, text }) {
-  const [sub, ...rest] = String(text || "").trim().split(/\s+/);
-  const arg = rest.join(" ").trim();
+  const parts = String(text || "").trim().split(/\s+/);
+  const sub = (parts[0] || "").toLowerCase();
+  const arg = parts.slice(1).join(" ").trim();
 
   // These work without (or regardless of) an account link.
   if (!sub || sub === "help") {
@@ -613,7 +614,7 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
 
   if (sub === "list") {
     const docs = (await Documents.list(user.id)).slice(0, 25);
-    if (!docs.length) return { text: "No documents yet.", blocks: [section("You don't have any documents yet. Try `/superdoc new <prompt>`.")] };
+    if (!docs.length) return { text: "No documents yet.", blocks: [section("You don't have any documents yet. Try `/superdoc new <name>`.")] };
     return {
       text: "Your recent documents",
       blocks: [

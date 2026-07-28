@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { verifySlackSignature } from "@/lib/slack";
 import { handleMessage, botTokenForTeam } from "@/lib/slack-actions";
-import { SlackDebug } from "@/lib/store";
+import { SlackDebug, SlackEvents } from "@/lib/store";
 
 // Slack Events API webhook: URL verification handshake + inbound app_mention /
 // message.im events. We verify the signature, ack within Slack's 3s window, and
@@ -65,8 +65,16 @@ export async function POST(request) {
 
   const event = payload.event;
   const teamId = payload.team_id || event.team;
+  const eventId = payload.event_id;
 
   after(async () => {
+    // Idempotency: Slack re-delivers on timeout/retry and the bot mutates docs,
+    // so handle each event once. A failed handler releases the claim so a
+    // genuine retry can re-process.
+    if (eventId && !(await SlackEvents.claim(eventId))) {
+      await SlackDebug.log({ kind: "handle", stage: "duplicate_skipped", teamId }).catch(() => {});
+      return;
+    }
     try {
       const botToken = await botTokenForTeam(teamId);
       await SlackDebug.log({ kind: "handle", stage: "start", teamId, hasToken: !!botToken, eventType: event.type }).catch(() => {});
@@ -82,6 +90,7 @@ export async function POST(request) {
       });
       await SlackDebug.log({ kind: "handle", stage: "done", teamId }).catch(() => {});
     } catch (err) {
+      if (eventId) await SlackEvents.release(eventId).catch(() => {});
       await SlackDebug.log({
         kind: "handle", stage: "error", teamId,
         error: String(err?.message || err), code: err?.code || null,

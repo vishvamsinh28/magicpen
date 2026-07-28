@@ -22,7 +22,13 @@ export async function POST(request) {
   const channel = form.get("channel_id");
   const text = form.get("text") || "";
   const responseUrl = form.get("response_url");
-  const sub = text.trim().split(/\s+/)[0];
+  const sub = (text.trim().split(/\s+/)[0] || "").toLowerCase();
+
+  const notInstalled = () =>
+    fetch(responseUrl, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ response_type: "ephemeral", text: "The bot isn't fully installed yet — no bot token for this workspace." }),
+    }).catch(() => {});
 
   // Create a new, empty document (named by the user) + post it as a thread.
   if (sub === "new") {
@@ -30,13 +36,7 @@ export async function POST(request) {
     after(async () => {
       try {
         const botToken = await botTokenForTeam(teamId);
-        if (!botToken) {
-          await fetch(responseUrl, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ response_type: "ephemeral", text: "The bot isn't fully installed yet — no bot token for this workspace." }),
-          }).catch(() => {});
-          return;
-        }
+        if (!botToken) { await notInstalled(); return; }
         await createDocFromSlash({ teamId, channel, slackUserId, name, botToken, responseUrl });
       } catch (err) {
         console.error("[superdocs/slack] slash 'new' failed:", err);
@@ -51,7 +51,7 @@ export async function POST(request) {
     after(async () => {
       try {
         const botToken = await botTokenForTeam(teamId);
-        if (!botToken) return;
+        if (!botToken) { await notInstalled(); return; }
         await openDocFromSlash({ teamId, channel, slackUserId, query, botToken, responseUrl });
       } catch (err) {
         console.error("[superdocs/slack] slash 'open' failed:", err);
@@ -65,7 +65,7 @@ export async function POST(request) {
     after(async () => {
       try {
         const botToken = await botTokenForTeam(teamId);
-        if (!botToken) return;
+        if (!botToken) { await notInstalled(); return; }
         await clearConversation({ teamId, channel, botToken, responseUrl });
       } catch (err) {
         console.error("[superdocs/slack] slash 'clear' failed:", err);

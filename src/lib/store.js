@@ -13,7 +13,7 @@ export const newId = () => randomUUID();
 const EMPTY = {
   users: [], documents: [], chats: [], messages: [], changes: [], versions: [],
   shares: [], comments: [], docstates: [], docupdates: [], presence: [],
-  slackinstalls: [], slacklinks: [], slackthreads: [], slackdebug: [],
+  slackinstalls: [], slacklinks: [], slackthreads: [], slackdebug: [], slackevents: [],
 };
 
 /* ------------------------------ Mongo store ------------------------------ */
@@ -559,4 +559,22 @@ export const SlackThreads = {
 export const SlackDebug = {
   log: (record) => store().insert("slackdebug", { id: newId(), ...record, createdAt: now() }),
   recent: (n = 30) => store().find("slackdebug", {}, { sort: ["createdAt", -1], limit: n }),
+};
+
+/* ------------------------------ Slack events ------------------------------ */
+// Idempotency guard: Slack re-delivers events on timeout/retry, and the bot
+// mutates documents, so each event must be handled at most once. claim() wins
+// exactly once per eventId (the _id unique constraint is atomic in Mongo);
+// release() lets a genuinely-failed handler be retried.
+
+export const SlackEvents = {
+  claim: async (eventId) => {
+    try {
+      await store().insert("slackevents", { id: eventId, createdAt: now() });
+      return true;
+    } catch {
+      return false; // already claimed
+    }
+  },
+  release: (eventId) => store().removeWhere("slackevents", { id: eventId }),
 };
