@@ -18,8 +18,11 @@ import {
 
 /* --------------------------- identity & tokens ---------------------------- */
 
+// Prefers the per-workspace token from the OAuth install; falls back to a
+// single SLACK_BOT_TOKEN env var (handy for a dev/single workspace when the
+// install record is missing).
 export const botTokenForTeam = async (teamId) =>
-  (await SlackInstalls.getByTeam(teamId))?.botToken || null;
+  (await SlackInstalls.getByTeam(teamId))?.botToken || process.env.SLACK_BOT_TOKEN || null;
 
 // Returns the SuperDocs user linked to this Slack identity, or null.
 export async function resolveUser(teamId, slackUserId) {

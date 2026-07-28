@@ -13,7 +13,7 @@ export const newId = () => randomUUID();
 const EMPTY = {
   users: [], documents: [], chats: [], messages: [], changes: [], versions: [],
   shares: [], comments: [], docstates: [], docupdates: [], presence: [],
-  slackinstalls: [], slacklinks: [], slackthreads: [],
+  slackinstalls: [], slacklinks: [], slackthreads: [], slackdebug: [],
 };
 
 /* ------------------------------ Mongo store ------------------------------ */
@@ -548,4 +548,15 @@ export const SlackThreads = {
       { teamId, channelId, threadTs },
       { userId, documentId, chatId, updatedAt: now() }
     ),
+};
+
+/* ------------------------------- Slack debug ------------------------------ */
+// Temporary observability for wiring up the Slack integration: every inbound
+// request and handler outcome is appended here so failures (events not
+// arriving, signature mismatch, missing token, Slack API errors) are visible
+// without server log access. Safe to remove once the bot is working.
+
+export const SlackDebug = {
+  log: (record) => store().insert("slackdebug", { id: newId(), ...record, createdAt: now() }),
+  recent: (n = 30) => store().find("slackdebug", {}, { sort: ["createdAt", -1], limit: n }),
 };
