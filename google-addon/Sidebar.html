@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --ink: #1f1e1b; --muted: #8a8880; --line: #e6e4df; --bg: #f7f7f5;
+        --blue: #1d63d8; --blue-ink: #fff; --card: #fff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+        color: var(--ink); margin: 0; padding: 12px; background: var(--bg);
+        font-size: 13px;
+      }
+      h1 { font-size: 15px; margin: 0 0 2px; }
+      .sub { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+      .scope {
+        display: inline-block; font-size: 11px; color: var(--muted);
+        background: #efeee9; border: 1px solid var(--line);
+        border-radius: 999px; padding: 2px 9px; margin-bottom: 10px;
+      }
+      textarea {
+        width: 100%; min-height: 84px; resize: vertical; padding: 9px 10px;
+        border: 1px solid var(--line); border-radius: 9px; font: inherit;
+        background: var(--card);
+      }
+      button {
+        margin-top: 8px; width: 100%; background: var(--blue); color: var(--blue-ink);
+        border: 0; border-radius: 9px; padding: 10px 14px; font-size: 14px;
+        font-weight: 600; cursor: pointer;
+      }
+      button:disabled { opacity: .55; cursor: default; }
+      button.secondary { background: #efeee9; color: var(--ink); border: 1px solid var(--line); }
+      .status { margin-top: 12px; font-size: 12px; line-height: 1.5; }
+      .status.err { color: #b3261e; }
+      .status.ok { color: #1f7a34; }
+      .reply {
+        margin-top: 10px; padding: 10px; background: var(--card);
+        border: 1px solid var(--line); border-radius: 9px; line-height: 1.5;
+        white-space: pre-wrap;
+      }
+      .reply .summary { color: var(--muted); font-size: 11px; margin-top: 6px; }
+      .banner {
+        margin: 0 0 12px; padding: 10px; border-radius: 9px;
+        background: #eef3fd; border: 1px solid #cfe0fb; line-height: 1.45;
+      }
+      .banner a { color: var(--blue); font-weight: 600; }
+      .hint { color: var(--muted); font-size: 11px; margin-top: 10px; line-height: 1.45; }
+      .spinner { display: none; }
+      .busy .spinner { display: inline; }
+      .examples { margin-top: 10px; }
+      .examples button {
+        width: auto; display: inline-block; margin: 3px 4px 0 0; padding: 5px 9px;
+        font-size: 11px; font-weight: 500; background: #efeee9; color: var(--ink);
+        border: 1px solid var(--line);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SuperDocs</h1>
+    <p class="sub">Edit this doc with AI.</p>
+
+    <div id="connectBanner" class="banner" style="display:none">
+      Connect your SuperDocs account to start editing.
+      <a id="connectLink" href="#" target="_blank" rel="noopener">Connect SuperDocs →</a>
+    </div>
+
+    <div id="scope" class="scope">Target: whole document</div>
+
+    <textarea id="msg" placeholder="e.g. tighten the intro · add a Projects section · translate to Spanish · make it more formal"></textarea>
+    <div class="examples">
+      <button type="button" class="ex">Fix grammar &amp; spelling</button>
+      <button type="button" class="ex">Make it more concise</button>
+      <button type="button" class="ex">Make the tone more formal</button>
+    </div>
+    <button id="run" type="button">Apply<span class="spinner">…</span></button>
+
+    <div id="status" class="status"></div>
+    <div id="reply" class="reply" style="display:none"></div>
+
+    <p class="hint">Tip: select text first to edit just that part, or select nothing to work on the whole document.</p>
+
+    <script>
+      var el = function (id) { return document.getElementById(id); };
+      var busy = false;
+
+      function setBusy(b) {
+        busy = b;
+        document.body.classList.toggle('busy', b);
+        el('run').disabled = b;
+      }
+      function setStatus(text, kind) {
+        var s = el('status');
+        s.textContent = text || '';
+        s.className = 'status' + (kind ? ' ' + kind : '');
+      }
+      function showReply(reply, summary) {
+        var box = el('reply');
+        if (!reply) { box.style.display = 'none'; return; }
+        box.innerHTML = '';
+        var p = document.createElement('div');
+        p.textContent = reply;
+        box.appendChild(p);
+        if (summary) {
+          var s = document.createElement('div');
+          s.className = 'summary';
+          s.textContent = summary;
+          box.appendChild(s);
+        }
+        box.style.display = 'block';
+      }
+      function showConnect(url) {
+        if (url) el('connectLink').href = url;
+        el('connectBanner').style.display = 'block';
+      }
+
+      function refreshScope() {
+        google.script.run.withSuccessHandler(function (ctx) {
+          el('scope').textContent = 'Target: ' + (ctx.hasSelection ? 'current selection' : 'whole document');
+          if (!ctx.email) {
+            setStatus("Couldn't read your Google email — use this inside your own workspace.", 'err');
+          }
+        }).getContext();
+      }
+
+      function run() {
+        if (busy) return;
+        var message = el('msg').value.trim();
+        if (!message) { setStatus('Type an instruction first.', 'err'); return; }
+        setBusy(true);
+        setStatus('Working…');
+        showReply('');
+        google.script.run
+          .withSuccessHandler(function (res) {
+            setBusy(false);
+            if (!res.ok) {
+              if (res.notLinked) showConnect(res.connectUrl);
+              setStatus(res.error || 'Something went wrong.', 'err');
+              return;
+            }
+            el('connectBanner').style.display = 'none';
+            var where = res.scope === 'selection' ? 'the selection' : 'the document';
+            setStatus(res.changed ? 'Updated ' + where + '.' : 'No changes were needed.', 'ok');
+            showReply(res.reply, res.summary);
+            refreshScope();
+          })
+          .withFailureHandler(function (err) {
+            setBusy(false);
+            setStatus((err && err.message) ? err.message : 'The request failed.', 'err');
+          })
+          .runAssist(message);
+      }
+
+      el('run').addEventListener('click', run);
+      el('msg').addEventListener('keydown', function (e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run();
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.ex'), function (b) {
+        b.addEventListener('click', function () { el('msg').value = b.textContent; el('msg').focus(); });
+      });
+
+      // Prime the connect banner up front if the user isn't linked, and show the
+      // current target (selection vs whole doc).
+      google.script.run.withSuccessHandler(function (res) {
+        if (res && res.ok && res.connectUrl) el('connectLink').href = res.connectUrl;
+      }).getConnectUrl();
+      refreshScope();
+    </script>
+  </body>
+</html>
