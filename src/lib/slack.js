@@ -95,6 +95,26 @@ export const postMessage = (token, params) => slackApi("chat.postMessage", token
 export const postEphemeral = (token, params) => slackApi("chat.postEphemeral", token, params);
 export const getUserInfo = (token, user) => slackApi("users.info", token, { user });
 
+// Identity of the token's bot user (used to find the bot's own messages).
+export const authTest = (token) => slackApi("auth.test", token, {});
+export const deleteMessage = (token, channel, ts) => slackApi("chat.delete", token, { channel, ts });
+export const deleteFile = (token, file) => slackApi("files.delete", token, { file });
+
+// Read a conversation's message history (a page at a time). Uses urlencoded
+// form — the read methods are happiest that way.
+export async function conversationsHistory(token, { channel, cursor, limit = 200 }) {
+  const params = new URLSearchParams({ channel, limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  const res = await fetch("https://slack.com/api/conversations.history", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Bearer ${token}` },
+    body: params,
+  });
+  const data = await res.json().catch(() => ({ ok: false, error: "invalid_json_response" }));
+  if (!data.ok) throw new SlackApiError("conversations.history", data.error, data);
+  return data;
+}
+
 // Download a Slack-hosted file (url_private) — needs the bot token as a bearer.
 export async function downloadSlackFile(urlPrivate, token) {
   const res = await fetch(urlPrivate, { headers: { Authorization: `Bearer ${token}` } });

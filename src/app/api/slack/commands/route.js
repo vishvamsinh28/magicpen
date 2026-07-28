@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { readVerified } from "@/lib/slack";
-import { handleSlashCommand, createDocFromSlash, botTokenForTeam } from "@/lib/slack-actions";
+import { handleSlashCommand, createDocFromSlash, clearConversation, botTokenForTeam } from "@/lib/slack-actions";
 
 // Slash command webhook for `/superdoc …`. Fast, DB-only subcommands answer
 // inline. `new` runs the AI and posts a document thread, so it acks immediately
@@ -43,6 +43,20 @@ export async function POST(request) {
       }
     });
     return ephemeral({ text: "✍️ Drafting your document…" });
+  }
+
+  // Slow path: delete the bot's messages/files in this conversation.
+  if (sub === "clear") {
+    after(async () => {
+      try {
+        const botToken = await botTokenForTeam(teamId);
+        if (!botToken) return;
+        await clearConversation({ teamId, channel, botToken, responseUrl });
+      } catch (err) {
+        console.error("[superdocs/slack] slash 'clear' failed:", err);
+      }
+    });
+    return ephemeral({ text: "🧹 Clearing my messages…" });
   }
 
   // Fast path: compute and return directly.

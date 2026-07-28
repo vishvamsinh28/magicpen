@@ -9,6 +9,7 @@ import { parseFileToHtml, MAX_UPLOAD_BYTES, fileExtension, ACCEPTED_EXTENSIONS }
 import { exportDoc, EXPORT_FORMATS } from "@/lib/export";
 import {
   postMessage, uploadFileToSlack, downloadSlackFile, docUrl, connectUrl, signConnectState,
+  authTest, conversationsHistory, deleteMessage, deleteFile,
 } from "@/lib/slack";
 
 // The bot's brain. Interaction model:
@@ -392,20 +393,78 @@ export async function createDocFromSlash({ teamId, channel, slackUserId, prompt,
   }
 }
 
+/* ------------------------ slash: clear (background) ----------------------- */
+
+// Deletes the bot's own messages (and files it posted) in the conversation
+// where `/superdoc clear` was run. Slack won't let a user delete a bot's
+// messages, so the bot does it. Only messages authored by THIS bot user are
+// touched — human and other-app messages are left alone.
+export async function clearConversation({ teamId, channel, botToken, responseUrl }) {
+  let botUserId = (await SlackInstalls.getByTeam(teamId))?.botUserId;
+  if (!botUserId) {
+    try { botUserId = (await authTest(botToken)).user_id; } catch {}
+  }
+  if (!botUserId) {
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: "Couldn't identify the bot to clear its messages. Make sure the app is installed." });
+    return;
+  }
+
+  const messageTs = [];
+  const fileIds = new Set();
+  let cursor;
+  let pages = 0;
+  try {
+    do {
+      const hist = await conversationsHistory(botToken, { channel, cursor, limit: 200 });
+      for (const m of hist.messages || []) {
+        if (m.user !== botUserId) continue; // only this bot's own messages
+        messageTs.push(m.ts);
+        for (const f of m.files || []) if (f.id) fileIds.add(f.id);
+      }
+      cursor = hist.response_metadata?.next_cursor;
+      pages++;
+    } while (cursor && pages < 10);
+  } catch (err) {
+    console.error("[superdocs/slack] clear: history read failed:", err);
+    const hint = err.code === "missing_scope" ? " (the bot needs history access for this conversation)" : "";
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `Couldn't read this conversation${hint}.` });
+    return;
+  }
+
+  let deletedMsgs = 0;
+  let rateLimited = false;
+  for (const ts of messageTs) {
+    try {
+      await deleteMessage(botToken, channel, ts);
+      deletedMsgs++;
+    } catch (err) {
+      if (err.code === "ratelimited") { rateLimited = true; break; }
+      // message_not_found / cant_delete_message — skip and continue
+    }
+  }
+
+  let deletedFiles = 0;
+  for (const id of fileIds) {
+    try { await deleteFile(botToken, id); deletedFiles++; } catch {}
+  }
+
+  const filePart = deletedFiles ? ` and ${deletedFiles} file${deletedFiles === 1 ? "" : "s"}` : "";
+  const morePart = rateLimited ? " — hit Slack's rate limit, run `/superdoc clear` again for the rest" : "";
+  await postToResponseUrl(responseUrl, {
+    response_type: "ephemeral",
+    text: `🧹 Cleared ${deletedMsgs} message${deletedMsgs === 1 ? "" : "s"}${filePart}${morePart}.`,
+  });
+}
+
 /* ------------------------ slash: fast commands ---------------------------- */
 
 // `/superdoc <sub>` for list / open / commit / help. Returns a payload the route
 // sends as an ephemeral reply. (`new` is handled by createDocFromSlash.)
 export async function handleSlashCommand({ teamId, slackUserId, text }) {
-  const user = await resolveUser(teamId, slackUserId);
-  if (!user) {
-    const state = await signConnectState({ teamId, slackUserId });
-    return connectPayload(connectUrl(state));
-  }
-
   const [sub, ...rest] = String(text || "").trim().split(/\s+/);
   const arg = rest.join(" ").trim();
 
+  // These work without (or regardless of) an account link.
   if (!sub || sub === "help") {
     return {
       text: "SuperDocs commands",
@@ -414,10 +473,27 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
         "• `/superdoc new <prompt>` — draft a new document (I'll post it as a thread)\n" +
         "• `/superdoc list` — your recent documents\n" +
         "• `/superdoc open <title>` — open a document\n" +
-        "• `/superdoc commit [label]` — snapshot your most recent document\n\n" +
+        "• `/superdoc commit [label]` — snapshot your most recent document\n" +
+        "• `/superdoc disconnect` — unlink your account (to switch accounts)\n" +
+        "• `/superdoc clear` — delete all of my messages in this conversation\n\n" +
         "Then *reply in a document's thread* to edit it, or type *commit* / *undo* / *send* there."
       )],
     };
+  }
+
+  if (sub === "disconnect") {
+    const existing = await SlackLinks.get(teamId, slackUserId);
+    if (!existing) {
+      return { text: "Not connected.", blocks: [section("You're not connected to a SuperDocs account. DM me to connect one.")] };
+    }
+    await SlackLinks.unlink(teamId, slackUserId);
+    return { text: "Disconnected.", blocks: [section("✅ Disconnected from SuperDocs. DM me *hi* to connect a different account.")] };
+  }
+
+  const user = await resolveUser(teamId, slackUserId);
+  if (!user) {
+    const state = await signConnectState({ teamId, slackUserId });
+    return connectPayload(connectUrl(state));
   }
 
   if (sub === "list") {
