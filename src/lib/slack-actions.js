@@ -9,7 +9,7 @@ import { parseFileToHtml, MAX_UPLOAD_BYTES, fileExtension, ACCEPTED_EXTENSIONS }
 import { exportDoc, EXPORT_FORMATS } from "@/lib/export";
 import {
   postMessage, uploadFileToSlack, downloadSlackFile, docUrl, connectUrl, signConnectState,
-  authTest, conversationsHistory, deleteMessage, deleteFile,
+  authTest, conversationsHistory, conversationsReplies, deleteMessage, deleteFile,
 } from "@/lib/slack";
 
 // The bot's brain. Interaction model:
@@ -411,15 +411,34 @@ export async function clearConversation({ teamId, channel, botToken, responseUrl
 
   const messageTs = [];
   const fileIds = new Set();
+  const collect = (m) => {
+    if (m.user !== botUserId) return; // only this bot's own messages
+    messageTs.push(m.ts);
+    for (const f of m.files || []) if (f.id) fileIds.add(f.id);
+  };
+
   let cursor;
   let pages = 0;
   try {
     do {
       const hist = await conversationsHistory(botToken, { channel, cursor, limit: 200 });
       for (const m of hist.messages || []) {
-        if (m.user !== botUserId) continue; // only this bot's own messages
-        messageTs.push(m.ts);
-        for (const f of m.files || []) if (f.id) fileIds.add(f.id);
+        // The bot mostly posts as thread replies, which history never returns —
+        // walk each thread and collect the bot's replies too.
+        if (m.reply_count > 0 || (m.thread_ts && m.thread_ts === m.ts)) {
+          let rCursor;
+          let rPages = 0;
+          do {
+            const rep = await conversationsReplies(botToken, { channel, ts: m.thread_ts || m.ts, cursor: rCursor, limit: 200 });
+            for (const rm of rep.messages || []) {
+              if (rm.ts === m.ts) continue; // parent is collected below
+              collect(rm);
+            }
+            rCursor = rep.response_metadata?.next_cursor;
+            rPages++;
+          } while (rCursor && rPages < 10);
+        }
+        collect(m); // the top-level message itself
       }
       cursor = hist.response_metadata?.next_cursor;
       pages++;

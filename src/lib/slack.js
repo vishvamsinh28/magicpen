@@ -115,6 +115,20 @@ export async function conversationsHistory(token, { channel, cursor, limit = 200
   return data;
 }
 
+// Read the replies of a single thread (history returns only the parents).
+export async function conversationsReplies(token, { channel, ts, cursor, limit = 200 }) {
+  const params = new URLSearchParams({ channel, ts, limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  const res = await fetch("https://slack.com/api/conversations.replies", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Bearer ${token}` },
+    body: params,
+  });
+  const data = await res.json().catch(() => ({ ok: false, error: "invalid_json_response" }));
+  if (!data.ok) throw new SlackApiError("conversations.replies", data.error, data);
+  return data;
+}
+
 // Download a Slack-hosted file (url_private) — needs the bot token as a bearer.
 export async function downloadSlackFile(urlPrivate, token) {
   const res = await fetch(urlPrivate, { headers: { Authorization: `Bearer ${token}` } });
