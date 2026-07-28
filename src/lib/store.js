@@ -14,6 +14,7 @@ const EMPTY = {
   users: [], documents: [], chats: [], messages: [], changes: [], versions: [],
   shares: [], comments: [], docstates: [], docupdates: [], presence: [],
   slackinstalls: [], slacklinks: [], slackthreads: [], slackdebug: [], slackevents: [],
+  googlelinks: [],
 };
 
 /* ------------------------------ Mongo store ------------------------------ */
@@ -44,6 +45,7 @@ function mongoStore(uri) {
           d.collection("slackinstalls").createIndex({ teamId: 1 }, { unique: true }),
           d.collection("slacklinks").createIndex({ teamId: 1, slackUserId: 1 }, { unique: true }),
           d.collection("slackthreads").createIndex({ teamId: 1, channelId: 1, threadTs: 1 }, { unique: true }),
+          d.collection("googlelinks").createIndex({ googleUserId: 1 }, { unique: true }),
         ]).catch(() => {});
         return d;
       })();
@@ -532,6 +534,19 @@ export const SlackLinks = {
   link: ({ teamId, slackUserId, userId }) =>
     store().upsert("slacklinks", { teamId, slackUserId }, { userId, updatedAt: now() }),
   unlink: (teamId, slackUserId) => store().removeWhere("slacklinks", { teamId, slackUserId }),
+};
+
+/* ------------------------------ Google links ------------------------------ */
+// Maps a Google identity (the add-on user's email) to a SuperDocs account so
+// the Docs add-on can act as that user. Written by the browser connect flow,
+// which proves the SuperDocs session before linking — the same pattern as
+// SlackLinks. Keyed (and uniquely indexed) on googleUserId.
+
+export const GoogleLinks = {
+  get: (googleUserId) => store().findOne("googlelinks", { googleUserId }),
+  link: ({ googleUserId, userId }) =>
+    store().upsert("googlelinks", { googleUserId }, { userId, updatedAt: now() }),
+  unlink: (googleUserId) => store().removeWhere("googlelinks", { googleUserId }),
 };
 
 /* ------------------------------ Slack threads ----------------------------- */

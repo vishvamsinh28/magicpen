@@ -40,6 +40,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# google docs add-on (clasp): local project id + clasp creds
+/google-addon/.clasp.json
+.clasprc.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
