@@ -4,7 +4,7 @@ import {
 } from "@/lib/store";
 import { runAssistant, summarizeEdits } from "@/lib/gemini";
 import { htmlToBlocks, applyOpsToHtml, isHtmlEmpty } from "@/lib/blocks-server";
-import { cleanDocHtml, htmlToText } from "@/lib/sanitize";
+import { cleanDocHtml } from "@/lib/sanitize";
 import { parseFileToHtml, MAX_UPLOAD_BYTES, fileExtension, ACCEPTED_EXTENSIONS } from "@/lib/parse";
 import { exportDoc, EXPORT_FORMATS } from "@/lib/export";
 import {
@@ -44,11 +44,6 @@ function unwrapSlackText(text = "") {
     .replace(/<([^>]+)>/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function deriveTitle(html) {
-  const text = htmlToText(html).split("\n").find((l) => l.trim());
-  return (text || "Untitled document").trim().slice(0, 80);
 }
 
 // Slack backslash-escapes markdown chars (\_ \* \~) in slash-command text, so a
@@ -126,11 +121,11 @@ function helpBlocks() {
   return [
     section("👋 I work through *commands* and *threads* — I won't turn a plain message into a document."),
     section(
-      "*Create* → `/superdoc new <what you want>`\n" +
+      "*Create* → `/superdoc new <name>` (then add content in its thread)\n" +
       "*Your documents* → `/superdoc list`\n" +
       "*Open one* → `/superdoc open <title>`\n" +
       "*Import a file* → just drag it into this chat\n\n" +
-      "Once a document exists, *reply inside its thread* to edit it — and type *commit*, *undo*, or *send* right in that thread."
+      "Once a document exists, *reply inside its thread* to add or edit content — and type *commit*, *undo*, or *send* right in that thread."
     ),
   ];
 }
@@ -306,7 +301,9 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
 
   if (changed) {
     const patch = { contentHtml: afterHtml };
-    if (result.title) patch.title = result.title.slice(0, 200);
+    // Keep the user's chosen name — only auto-title a doc still left as default.
+    const isDefaultTitle = !doc.title || /^untitled document$/i.test(doc.title.trim());
+    if (result.title && isDefaultTitle) patch.title = result.title.slice(0, 200);
     await Documents.update(doc.id, user.id, patch);
     await Changes.add({
       userId: user.id, documentId: doc.id, chatId: chat.id,
@@ -337,66 +334,92 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
 
 /* ------------------------- slash: create (/superdoc new) ------------------ */
 
-// Runs in the background (AI is slow); posts a real message as the thread root,
-// binds the thread to the new document, and delivers the file. Replies to the
-// slash command privately via response_url.
-export async function createDocFromSlash({ teamId, channel, slackUserId, prompt, botToken, responseUrl }) {
+// Creates a new, EMPTY document titled exactly what the user typed, posts it as
+// a thread, and binds the thread. Content is added later by replying in the
+// thread. No AI runs at creation time.
+export async function createDocFromSlash({ teamId, channel, slackUserId, name, botToken, responseUrl }) {
   const user = await resolveUser(teamId, slackUserId);
   if (!user) {
     const state = await signConnectState({ teamId, slackUserId });
     await postToResponseUrl(responseUrl, { response_type: "ephemeral", ...connectPayload(connectUrl(state)) });
     return;
   }
-  if (!prompt.trim()) {
-    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: "Usage: `/superdoc new <what you want>`" });
-    return;
-  }
 
-  let result;
-  try {
-    result = await runAssistant({ message: prompt, blocks: [], docTitle: "", history: [], mode: "balanced" });
-  } catch (err) {
-    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: aiErrorText(err) });
-    return;
-  }
+  const title = (deSlackEscape(name).trim() || "Untitled document").slice(0, 200);
+  const doc = await Documents.create({ userId: user.id, title, contentHtml: "" });
+  const chat = await Chats.create({ userId: user.id, title: title.slice(0, 64), scope: "document", documentId: doc.id });
 
-  const html = cleanDocHtml(applyOpsToHtml("", result.edits));
-  if (isHtmlEmpty(html)) {
-    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: result.reply });
-    return;
-  }
-
-  const title = (result.title || deriveTitle(html)).slice(0, 200);
-  const doc = await Documents.create({ userId: user.id, title, contentHtml: html });
-  const chat = await Chats.create({ userId: user.id, title: prompt.slice(0, 64), scope: "document", documentId: doc.id });
-  await Messages.add({ chatId: chat.id, userId: user.id, role: "user", content: prompt });
-  await Messages.add({
-    chatId: chat.id, userId: user.id, role: "assistant", content: result.reply,
-    edits: result.edits.length ? result.edits : null, editSummary: summarizeEdits(result.edits),
-  });
-
-  // Post the document card as the thread root, then bind the thread.
-  let rootTs = null;
   try {
     const posted = await postMessage(botToken, {
       channel,
       text: `📄 Created *${title}*`,
       blocks: [
-        section(`📄 Created *${title}*\n${result.reply}`),
-        context('Reply in this thread to edit — e.g. _"add a risks section"_. Type *commit* · *undo* · *send docx|md|txt* right here.'),
+        section(`📄 Created *${title}* — a new, empty document.`),
+        context('Reply in this thread to add content — e.g. _"write a resume for a backend engineer"_ or _"draft a project kickoff outline"_. Then *send* for the file, *commit* to snapshot, *undo* to revert.'),
         section(openLink(doc.id)),
       ],
       unfurl_links: false,
     });
-    rootTs = posted.ts;
-    await SlackThreads.bind({ teamId, channelId: channel, threadTs: rootTs, userId: user.id, documentId: doc.id, chatId: chat.id });
-    await deliverFile({ botToken, channel, threadTs: rootTs, doc, comment: `📎 Here's *${title}*.` });
-    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `✅ Created *${title}* — see the thread I posted.` });
+    await SlackThreads.bind({ teamId, channelId: channel, threadTs: posted.ts, userId: user.id, documentId: doc.id, chatId: chat.id });
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `✅ Created *${title}* — reply in the thread I posted to add content.` });
   } catch (err) {
     console.error("[superdocs/slack] create post failed:", err);
     await postToResponseUrl(responseUrl, {
       response_type: "ephemeral",
       text: `✅ Created *${title}*, but I couldn't post it here (${err.code || "error"}). ${openLink(doc.id)}`,
+    });
+  }
+}
+
+/* ------------------------- slash: open (/superdoc open) ------------------- */
+
+// Opens an EXISTING document as a working thread: finds it by (forgiving) title
+// match, posts a thread root, binds the thread + a fresh chat, and delivers the
+// file — so the user can immediately reply to ask or edit it.
+export async function openDocFromSlash({ teamId, channel, slackUserId, query, botToken, responseUrl }) {
+  const user = await resolveUser(teamId, slackUserId);
+  if (!user) {
+    const state = await signConnectState({ teamId, slackUserId });
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", ...connectPayload(connectUrl(state)) });
+    return;
+  }
+
+  const q = deSlackEscape(query).trim();
+  if (!q) {
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: "Usage: `/superdoc open <title>`" });
+    return;
+  }
+
+  const docs = await Documents.list(user.id);
+  const nq = normalizeForMatch(q);
+  const doc =
+    (nq && docs.find((d) => normalizeForMatch(d.title) === nq)) ||
+    (nq && docs.find((d) => normalizeForMatch(d.title).includes(nq)));
+  if (!doc) {
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `No document matching *${q}*. Try \`/superdoc list\`.` });
+    return;
+  }
+
+  const chat = await Chats.create({ userId: user.id, title: doc.title.slice(0, 64), scope: "document", documentId: doc.id });
+  try {
+    const posted = await postMessage(botToken, {
+      channel,
+      text: `📄 Opened *${doc.title}*`,
+      blocks: [
+        section(`📄 Opened *${doc.title}*`),
+        context('Reply in this thread to work with it — e.g. _"what\'s in this doc?"_ or _"add a deadline section"_. Type *send* for the file, *commit* / *undo* too.'),
+        section(openLink(doc.id)),
+      ],
+      unfurl_links: false,
+    });
+    await SlackThreads.bind({ teamId, channelId: channel, threadTs: posted.ts, userId: user.id, documentId: doc.id, chatId: chat.id });
+    await deliverFile({ botToken, channel, threadTs: posted.ts, doc, comment: `📎 Here's *${doc.title}*.` });
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `✅ Opened *${doc.title}* — reply in the thread I posted to work with it.` });
+  } catch (err) {
+    console.error("[superdocs/slack] open post failed:", err);
+    await postToResponseUrl(responseUrl, {
+      response_type: "ephemeral",
+      text: `Found *${doc.title}* but couldn't post it here (${err.code || "error"}). ${openLink(doc.id)}`,
     });
   }
 }
@@ -497,7 +520,7 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
       text: "SuperDocs commands",
       blocks: [section(
         "*SuperDocs commands*\n" +
-        "• `/superdoc new <prompt>` — draft a new document (I'll post it as a thread)\n" +
+        "• `/superdoc new <name>` — create a named document (add content in its thread)\n" +
         "• `/superdoc list` — your recent documents\n" +
         "• `/superdoc open <title>` — open a document\n" +
         "• `/superdoc commit [label]` — snapshot your most recent document\n" +
@@ -561,7 +584,7 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
   if (sub === "new") {
     // Handled asynchronously by the route via createDocFromSlash; if it lands
     // here it means the route didn't special-case it.
-    return { text: "Use /superdoc new <prompt>", blocks: [section("Usage: `/superdoc new <prompt>`")] };
+    return { text: "Use /superdoc new <name>", blocks: [section("Usage: `/superdoc new <name>`")] };
   }
 
   return { text: "Unknown command", blocks: [section(`Unknown command \`${sub}\`. Try \`/superdoc help\`.`)] };

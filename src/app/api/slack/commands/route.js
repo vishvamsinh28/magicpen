@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { readVerified } from "@/lib/slack";
-import { handleSlashCommand, createDocFromSlash, clearConversation, botTokenForTeam } from "@/lib/slack-actions";
+import { handleSlashCommand, createDocFromSlash, openDocFromSlash, clearConversation, botTokenForTeam } from "@/lib/slack-actions";
 
 // Slash command webhook for `/superdoc …`. Fast, DB-only subcommands answer
 // inline. `new` runs the AI and posts a document thread, so it acks immediately
@@ -24,9 +24,9 @@ export async function POST(request) {
   const responseUrl = form.get("response_url");
   const sub = text.trim().split(/\s+/)[0];
 
-  // Slow path: create a document + post it as a thread.
+  // Create a new, empty document (named by the user) + post it as a thread.
   if (sub === "new") {
-    const prompt = text.trim().replace(/^new\s*/i, "");
+    const name = text.trim().replace(/^new\s*/i, "");
     after(async () => {
       try {
         const botToken = await botTokenForTeam(teamId);
@@ -37,12 +37,27 @@ export async function POST(request) {
           }).catch(() => {});
           return;
         }
-        await createDocFromSlash({ teamId, channel, slackUserId, prompt, botToken, responseUrl });
+        await createDocFromSlash({ teamId, channel, slackUserId, name, botToken, responseUrl });
       } catch (err) {
         console.error("[superdocs/slack] slash 'new' failed:", err);
       }
     });
-    return ephemeral({ text: "✍️ Drafting your document…" });
+    return ephemeral({ text: "📄 Creating your document…" });
+  }
+
+  // Open an existing document as a working thread.
+  if (sub === "open") {
+    const query = text.trim().replace(/^open\s*/i, "");
+    after(async () => {
+      try {
+        const botToken = await botTokenForTeam(teamId);
+        if (!botToken) return;
+        await openDocFromSlash({ teamId, channel, slackUserId, query, botToken, responseUrl });
+      } catch (err) {
+        console.error("[superdocs/slack] slash 'open' failed:", err);
+      }
+    });
+    return ephemeral({ text: "📂 Opening…" });
   }
 
   // Slow path: delete the bot's messages/files in this conversation.
