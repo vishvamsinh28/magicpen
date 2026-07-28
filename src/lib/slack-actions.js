@@ -7,6 +7,7 @@ import { htmlToBlocks, applyOpsToHtml, isHtmlEmpty } from "@/lib/blocks-server";
 import { cleanDocHtml } from "@/lib/sanitize";
 import { parseFileToHtml, MAX_UPLOAD_BYTES, fileExtension, ACCEPTED_EXTENSIONS } from "@/lib/parse";
 import { exportDoc, EXPORT_FORMATS } from "@/lib/export";
+import { removeStoredFile } from "@/lib/storage";
 import {
   postMessage, uploadFileToSlack, downloadSlackFile, docUrl, connectUrl, signConnectState,
   authTest, conversationsHistory, conversationsReplies, deleteMessage, deleteFile,
@@ -62,17 +63,25 @@ function aiErrorText(err) {
   return "The AI request failed — please try again.";
 }
 
-// In-thread meta commands vs. an edit/question.
+const FORMAT_ALIAS = { markdown: "md", text: "txt" };
+const parseFmt = (s) => {
+  const raw = (String(s || "").match(/\b(docx|md|markdown|txt|text|html)\b/i) || [])[1];
+  return raw ? (FORMAT_ALIAS[raw.toLowerCase()] || raw.toLowerCase()) : "docx";
+};
+
+// Actions are colon-tokens ONLY (:commit: :send: :undo: :rename: :delete:), so a
+// natural message can never be mistaken for a command. Anything without a leading
+// token is an edit/question.
 function parseThreadCommand(text) {
-  const m = text.trim();
-  if (/^commit\b/i.test(m)) return { action: "commit", arg: m.replace(/^commit(\s+version)?\s*/i, "").trim() };
-  if (/^undo\b/i.test(m)) return { action: "undo" };
-  if (/^(send|export|download)\b/i.test(m)) {
-    const raw = (m.match(/\b(docx|md|markdown|txt|text|html)\b/i) || [])[1];
-    const format = raw ? ({ markdown: "md", text: "txt" }[raw.toLowerCase()] || raw.toLowerCase()) : "docx";
-    return { action: "send", format };
-  }
-  return { action: "edit" };
+  const token = text.trim().match(/^:(commit|send|undo|rename|delete):\s*([\s\S]*)$/i);
+  if (!token) return { action: "edit" };
+  const action = token[1].toLowerCase();
+  const rest = token[2].trim();
+  if (action === "send") return { action: "send", format: parseFmt(rest) };
+  if (action === "commit") return { action: "commit", arg: rest };
+  if (action === "rename") return { action: "rename", arg: rest };
+  if (action === "delete") return { action: "delete", arg: rest };
+  return { action: "undo" };
 }
 
 const PRESENCE_ACTIVE_MS = 45_000;
@@ -117,16 +126,56 @@ export async function promptConnect({ botToken, channel, threadTs, teamId, slack
   await say(botToken, { channel, threadTs, ...connectPayload(connectUrl(state)) });
 }
 
+// The full reference shown by `/superdoc help` — every feature, command, and
+// in-thread action with examples, so users can discover what's possible.
+function commandsHelp() {
+  return {
+    text: "SuperDocs — everything I can do",
+    blocks: [
+      section("*SuperDocs — everything I can do* 📄\nI create, edit, version, and manage documents right here in Slack, powered by AI. Everything syncs to your SuperDocs account."),
+      section(
+        "*➕ Create & import*\n" +
+        "• `/superdoc new <name>` — create a document with that name\n" +
+        "       _example:_ `/superdoc new resume`\n" +
+        "• `/superdoc new` — create an untitled doc (I'll name it from your first content)\n" +
+        "• *Upload* — drag a `.docx` `.pdf` `.txt` `.rtf` `.md` `.html` file into this chat and I'll import it"
+      ),
+      section(
+        "*💬 Work on a document — reply inside its thread*\n" +
+        "When I create or open a doc, I post a *thread*. Do everything by replying in it:\n" +
+        "• *Write / add content* — _\"write a resume for a backend engineer\"_\n" +
+        "• *Edit* — _\"tighten the intro\"_ · _\"add a Projects section\"_ · _\"make it formal\"_ · _\"translate to Spanish\"_\n" +
+        "• *Ask about it* — _\"what's in this doc?\"_ · _\"summarize the key points\"_\n\n" +
+        "*Actions* — type the token exactly:\n" +
+        "• `:send:` — get the file as Word _(also `:send: md` · `:send: html` · `:send: txt`)_\n" +
+        "• `:commit:` or `:commit: <label>` — save a version snapshot\n" +
+        "• `:undo:` — revert the last change\n" +
+        "• `:rename: <new name>` — rename this document\n" +
+        "• `:delete:` — delete this document _(asks you to confirm)_"
+      ),
+      section(
+        "*🔎 Find & open*\n" +
+        "• `/superdoc list` — your recent documents\n" +
+        "• `/superdoc open <title>` — open an existing doc as a working thread\n" +
+        "       _example:_ `/superdoc open rent` opens \"Rent Agreement\" _(partial titles are fine)_"
+      ),
+      section(
+        "*⚙️ Account & cleanup*\n" +
+        "• *Connect* — DM me and tap *Connect SuperDocs* _(one-time)_\n" +
+        "• `/superdoc disconnect` — unlink, to switch accounts\n" +
+        "• `/superdoc clear` — delete all of my messages & files in this chat\n" +
+        "• `/superdoc help` — show this list"
+      ),
+      context("Tip: plain messages don't create anything — use `/superdoc new` or reply inside a document's thread."),
+    ],
+  };
+}
+
+// Short nudge shown when someone messages me outside a document thread.
 function helpBlocks() {
   return [
-    section("👋 I work through *commands* and *threads* — I won't turn a plain message into a document."),
-    section(
-      "*Create* → `/superdoc new <name>` (then add content in its thread)\n" +
-      "*Your documents* → `/superdoc list`\n" +
-      "*Open one* → `/superdoc open <title>`\n" +
-      "*Import a file* → just drag it into this chat\n\n" +
-      "Once a document exists, *reply inside its thread* to add or edit content — and type *commit*, *undo*, or *send* right in that thread."
-    ),
+    section("👋 I won't turn a plain message into a document. Use `/superdoc new <name>` to create one, or *reply inside a document's thread* to edit it."),
+    context("Type `/superdoc help` to see everything I can do."),
   ];
 }
 
@@ -186,6 +235,32 @@ async function sendDocFile({ botToken, channel, threadTs, user, documentId, form
   await deliverFile({ botToken, channel, threadTs, doc, format, comment: `📎 *${doc.title}*` });
 }
 
+async function renameDoc({ botToken, channel, threadTs, user, documentId, name }) {
+  const newName = deSlackEscape(name).trim().slice(0, 200);
+  if (!newName) { await say(botToken, { channel, threadTs, text: "Usage: `:rename: <new name>`" }); return; }
+  const doc = await Documents.get(documentId, user.id);
+  if (!doc) { await say(botToken, { channel, threadTs, text: "That document is no longer available." }); return; }
+  await Documents.update(documentId, user.id, { title: newName });
+  await say(botToken, { channel, threadTs, text: `✏️ Renamed *${doc.title}* → *${newName}*.` });
+}
+
+// Destructive: wipes the document plus its versions, change history, shares,
+// comments and collab state. Requires an explicit `:delete: confirm`.
+async function deleteDoc({ botToken, channel, threadTs, user, documentId, confirm }) {
+  const doc = await Documents.get(documentId, user.id);
+  if (!doc) { await say(botToken, { channel, threadTs, text: "That document is no longer available." }); return; }
+  if (String(confirm).toLowerCase() !== "confirm") {
+    await say(botToken, {
+      channel, threadTs,
+      text: `⚠️ This *permanently* deletes *${doc.title}* — including its versions and history. This can't be undone.\nType \`:delete: confirm\` to proceed.`,
+    });
+    return;
+  }
+  await Documents.remove(documentId, user.id);
+  if (doc.sourceFile?.storage?.path) await removeStoredFile(doc.sourceFile.storage.path).catch(() => {});
+  await say(botToken, { channel, threadTs, text: `🗑️ Permanently deleted *${doc.title}*. This thread is no longer linked to a document.` });
+}
+
 /* -------------------------------- upload ---------------------------------- */
 
 async function handleUpload({ user, teamId, channel, threadTs, botToken, file }) {
@@ -227,7 +302,7 @@ async function handleUpload({ user, teamId, channel, threadTs, botToken, file })
     text: `Imported *${parsed.title}*.`,
     blocks: [
       section(`📄 Imported *${parsed.title}* into SuperDocs.${parsed.notice ? `\n_${parsed.notice}_` : ""}`),
-      context('Reply in this thread to edit it — e.g. _"summarize the key points at the top"_. Type *send* for the file, *commit* to snapshot.'),
+      context('Reply in this thread to edit it — e.g. _"summarize the key points at the top"_. Actions: `:send:` for the file · `:commit:` to snapshot · `:undo:`.'),
       section(openLink(doc.id)),
     ],
   });
@@ -254,7 +329,7 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
 
   // Not inside a document thread → guide to commands. Never auto-create.
   if (!binding?.documentId) {
-    await say(botToken, { channel, threadTs, text: "Use `/superdoc new <prompt>` to create a document, or reply inside a document's thread to edit it.", blocks: helpBlocks() });
+    await say(botToken, { channel, threadTs, text: "Use `/superdoc new <name>` to create a document, or reply inside a document's thread to edit it.", blocks: helpBlocks() });
     return;
   }
 
@@ -266,7 +341,7 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
 
   const prompt = unwrapSlackText(text);
   if (!prompt) {
-    await say(botToken, { channel, threadTs, text: "Tell me what to change, or type *commit*, *undo*, or *send*." });
+    await say(botToken, { channel, threadTs, text: "Tell me what to change, or type an action: `:commit:` · `:undo:` · `:send:`." });
     return;
   }
 
@@ -275,6 +350,8 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
   if (cmd.action === "commit") return commitDoc({ botToken, channel, threadTs, user, documentId: doc.id, label: cmd.arg });
   if (cmd.action === "undo") return undoDoc({ botToken, channel, threadTs, user, documentId: doc.id });
   if (cmd.action === "send") return sendDocFile({ botToken, channel, threadTs, user, documentId: doc.id, format: cmd.format });
+  if (cmd.action === "rename") return renameDoc({ botToken, channel, threadTs, user, documentId: doc.id, name: cmd.arg });
+  if (cmd.action === "delete") return deleteDoc({ botToken, channel, threadTs, user, documentId: doc.id, confirm: cmd.arg });
 
   // Otherwise: edit / answer via the assistant.
   const chatHistory = binding.chatId ? await Messages.list(binding.chatId) : [];
@@ -325,7 +402,7 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
     const note = active ? "\n⚠️ Someone has this doc open — they'll see the change after a refresh." : "";
     const comment =
       `${result.reply}\n_${summarizeEdits(result.edits)}_${note}\n` +
-      "Type *commit* to snapshot · *undo* to revert · *send md* for another format.";
+      "Actions: `:send:` (or `:send: md` / `html` / `txt`) for the file · `:commit:` to snapshot · `:undo:` to revert.";
     await deliverFile({ botToken, channel, threadTs, doc: updated, comment });
   } else {
     await say(botToken, { channel, threadTs, text: result.reply });
@@ -355,7 +432,7 @@ export async function createDocFromSlash({ teamId, channel, slackUserId, name, b
       text: `📄 Created *${title}*`,
       blocks: [
         section(`📄 Created *${title}* — a new, empty document.`),
-        context('Reply in this thread to add content — e.g. _"write a resume for a backend engineer"_ or _"draft a project kickoff outline"_. Then *send* for the file, *commit* to snapshot, *undo* to revert.'),
+        context('Reply in this thread to add content — e.g. _"write a resume for a backend engineer"_. Actions: `:send:` for the file · `:commit:` to snapshot · `:undo:` to revert.'),
         section(openLink(doc.id)),
       ],
       unfurl_links: false,
@@ -407,7 +484,7 @@ export async function openDocFromSlash({ teamId, channel, slackUserId, query, bo
       text: `📄 Opened *${doc.title}*`,
       blocks: [
         section(`📄 Opened *${doc.title}*`),
-        context('Reply in this thread to work with it — e.g. _"what\'s in this doc?"_ or _"add a deadline section"_. Type *send* for the file, *commit* / *undo* too.'),
+        context('Reply in this thread to work with it — e.g. _"what\'s in this doc?"_ or _"add a deadline section"_. Actions: `:send:` · `:commit:` · `:undo:`.'),
         section(openLink(doc.id)),
       ],
       unfurl_links: false,
@@ -516,19 +593,7 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
 
   // These work without (or regardless of) an account link.
   if (!sub || sub === "help") {
-    return {
-      text: "SuperDocs commands",
-      blocks: [section(
-        "*SuperDocs commands*\n" +
-        "• `/superdoc new <name>` — create a named document (add content in its thread)\n" +
-        "• `/superdoc list` — your recent documents\n" +
-        "• `/superdoc open <title>` — open a document\n" +
-        "• `/superdoc commit [label]` — snapshot your most recent document\n" +
-        "• `/superdoc disconnect` — unlink your account (to switch accounts)\n" +
-        "• `/superdoc clear` — delete all of my messages in this conversation\n\n" +
-        "Then *reply in a document's thread* to edit it, or type *commit* / *undo* / *send* there."
-      )],
-    };
+    return commandsHelp();
   }
 
   if (sub === "disconnect") {
