@@ -51,6 +51,14 @@ function deriveTitle(html) {
   return (text || "Untitled document").trim().slice(0, 80);
 }
 
+// Slack backslash-escapes markdown chars (\_ \* \~) in slash-command text, so a
+// typed title like verification_letter_… arrives as verification\_letter\_….
+const deSlackEscape = (s) => String(s || "").replace(/\\([_*~`>|])/g, "$1");
+
+// Collapse to alphanumerics for forgiving title matching — underscores, dashes,
+// spaces, and Slack's escaping all become irrelevant.
+const normalizeForMatch = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
 const stamp = () => new Date().toISOString().slice(0, 16).replace("T", " ");
 
 function aiErrorText(err) {
@@ -516,7 +524,7 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
   }
 
   if (sub === "list") {
-    const docs = (await Documents.list(user.id)).slice(0, 10);
+    const docs = (await Documents.list(user.id)).slice(0, 25);
     if (!docs.length) return { text: "No documents yet.", blocks: [section("You don't have any documents yet. Try `/superdoc new <prompt>`.")] };
     return {
       text: "Your recent documents",
@@ -528,10 +536,15 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
   }
 
   if (sub === "open") {
-    if (!arg) return { text: "Usage", blocks: [section("Usage: `/superdoc open <title>`")] };
+    const query = deSlackEscape(arg).trim();
+    if (!query) return { text: "Usage", blocks: [section("Usage: `/superdoc open <title>`")] };
     const docs = await Documents.list(user.id);
-    const match = docs.find((d) => d.title.toLowerCase().includes(arg.toLowerCase()));
-    if (!match) return { text: "No match.", blocks: [section(`No document matching *${arg}*.`)] };
+    const nq = normalizeForMatch(query);
+    // Prefer an exact (normalized) title, else the first that contains the query.
+    const match =
+      (nq && docs.find((d) => normalizeForMatch(d.title) === nq)) ||
+      (nq && docs.find((d) => normalizeForMatch(d.title).includes(nq)));
+    if (!match) return { text: "No match.", blocks: [section(`No document matching *${query}*. Try \`/superdoc list\`.`)] };
     return { text: match.title, blocks: [section(`*${match.title}* — ${openLink(match.id)}`)] };
   }
 
