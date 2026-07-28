@@ -25,6 +25,7 @@ export const BOT_SCOPES = [
   "im:read",
   "im:write",
   "files:read",
+  "files:write",
   "commands",
   "users:read",
 ];
@@ -99,6 +100,33 @@ export async function downloadSlackFile(urlPrivate, token) {
   const res = await fetch(urlPrivate, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Slack file download failed: ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+// Upload a file into a channel/thread using Slack's current 3-step external
+// upload flow (files.upload is deprecated). Requires the files:write scope.
+// `comment` becomes the message text that carries the file.
+export async function uploadFileToSlack(token, { channel, threadTs, filename, buffer, title, comment }) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+
+  // 1) reserve an upload URL
+  const getRes = await fetch("https://slack.com/api/files.getUploadURLExternal", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Bearer ${token}` },
+    body: new URLSearchParams({ filename, length: String(bytes.length) }),
+  });
+  const getData = await getRes.json().catch(() => ({ ok: false, error: "invalid_json_response" }));
+  if (!getData.ok) throw new SlackApiError("files.getUploadURLExternal", getData.error, getData);
+
+  // 2) PUT the bytes to the reserved URL
+  const putRes = await fetch(getData.upload_url, { method: "POST", body: bytes });
+  if (!putRes.ok) throw new Error(`Slack file bytes upload failed: ${putRes.status}`);
+
+  // 3) finalize + share into the channel/thread
+  const params = { files: [{ id: getData.file_id, title: title || filename }] };
+  if (channel) params.channel_id = channel;
+  if (threadTs) params.thread_ts = threadTs;
+  if (comment) params.initial_comment = comment;
+  return slackApi("files.completeUploadExternal", token, params);
 }
 
 /* ------------------------------- OAuth v2 --------------------------------- */

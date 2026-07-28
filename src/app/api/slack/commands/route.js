@@ -1,10 +1,10 @@
 import { after } from "next/server";
 import { readVerified } from "@/lib/slack";
-import { handleSlashCommand } from "@/lib/slack-actions";
+import { handleSlashCommand, createDocFromSlash, botTokenForTeam } from "@/lib/slack-actions";
 
 // Slash command webhook for `/superdoc …`. Fast, DB-only subcommands answer
-// inline; `new` runs the AI, so it acks immediately and posts the result to the
-// command's response_url when ready (staying inside Slack's 3s ack window).
+// inline. `new` runs the AI and posts a document thread, so it acks immediately
+// and does its work in after() (staying inside Slack's 3s ack window).
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,25 +17,27 @@ export async function POST(request) {
   if (!ok) return new Response("bad signature", { status: 401 });
 
   const form = new URLSearchParams(body);
-  const args = {
-    teamId: form.get("team_id"),
-    slackUserId: form.get("user_id"),
-    channel: form.get("channel_id"),
-    text: form.get("text") || "",
-  };
+  const teamId = form.get("team_id");
+  const slackUserId = form.get("user_id");
+  const channel = form.get("channel_id");
+  const text = form.get("text") || "";
   const responseUrl = form.get("response_url");
-  const sub = args.text.trim().split(/\s+/)[0];
+  const sub = text.trim().split(/\s+/)[0];
 
-  // Slow path (AI): ack now, deliver via response_url.
+  // Slow path: create a document + post it as a thread.
   if (sub === "new") {
+    const prompt = text.trim().replace(/^new\s*/i, "");
     after(async () => {
       try {
-        const result = await handleSlashCommand(args);
-        await fetch(responseUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ response_type: "ephemeral", ...result }),
-        });
+        const botToken = await botTokenForTeam(teamId);
+        if (!botToken) {
+          await fetch(responseUrl, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ response_type: "ephemeral", text: "The bot isn't fully installed yet — no bot token for this workspace." }),
+          }).catch(() => {});
+          return;
+        }
+        await createDocFromSlash({ teamId, channel, slackUserId, prompt, botToken, responseUrl });
       } catch (err) {
         console.error("[superdocs/slack] slash 'new' failed:", err);
       }
@@ -45,7 +47,7 @@ export async function POST(request) {
 
   // Fast path: compute and return directly.
   try {
-    const result = await handleSlashCommand(args);
+    const result = await handleSlashCommand({ teamId, slackUserId, text });
     return ephemeral(result);
   } catch (err) {
     console.error("[superdocs/slack] slash command failed:", err);
