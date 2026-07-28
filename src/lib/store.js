@@ -39,7 +39,7 @@ function mongoStore(uri) {
           d.collection("comments").createIndex({ documentId: 1, createdAt: 1 }),
           d.collection("docstates").createIndex({ documentId: 1 }, { unique: true }),
           d.collection("docupdates").createIndex({ documentId: 1, seq: 1 }),
-          d.collection("presence").createIndex({ documentId: 1 }),
+          d.collection("presence").createIndex({ documentId: 1, actorId: 1 }, { unique: true }),
         ]).catch(() => {});
         return d;
       })();
@@ -86,6 +86,28 @@ function mongoStore(uri) {
       if (sort) cursor = cursor.sort({ [sort[0]]: sort[1] });
       if (limit) cursor = cursor.limit(limit);
       return (await cursor.toArray()).map(strip);
+    },
+    // Insert-or-update keyed on `query` in a single atomic step. Callers rely on
+    // this to avoid the findOne-then-insert race that duplicates rows; a unique
+    // index on the query keys is what makes concurrent upserts collapse onto one
+    // document. If two race the insert, the loser gets a duplicate-key error —
+    // the row exists by then, so fall back to a plain update.
+    async upsert(col, query, fields) {
+      const d = await db();
+      const filter = toMongo(query);
+      try {
+        const res = await d.collection(col).findOneAndUpdate(
+          filter,
+          { $set: fields, $setOnInsert: { _id: filter._id ?? newId() } },
+          { upsert: true, returnDocument: "after" }
+        );
+        return strip(res);
+      } catch {
+        const res = await d
+          .collection(col)
+          .findOneAndUpdate(filter, { $set: fields }, { returnDocument: "after" });
+        return strip(res);
+      }
     },
     // Atomically reserve the right to plant a shared document's initial content.
     // Grants only when nobody has seeded and no fresh reservation is held; a
@@ -190,6 +212,21 @@ function fileStore() {
       }
       if (limit) out = out.slice(0, limit);
       return out;
+    },
+    // See the Mongo variant. The find-and-create runs synchronously after the
+    // single await, so two concurrent callers can't both insert in one process.
+    async upsert(col, query, fields) {
+      const data = await load();
+      const row = data[col].find((r) => matches(r, query));
+      if (row) {
+        Object.assign(row, fields);
+        await persist(data);
+        return row;
+      }
+      const created = { id: newId(), ...query, ...fields };
+      data[col].push(created);
+      await persist(data);
+      return created;
     },
     // See the Mongo variant. The check-and-set runs synchronously after the
     // single await, so two concurrent callers can't both win in one process.
@@ -413,12 +450,11 @@ export const DocUpdates = {
 
 export const Presence = {
   list: (documentId) => store().find("presence", { documentId }),
-  async touch({ documentId, actorId, name, color, role }) {
-    const existing = await store().findOne("presence", { documentId, actorId });
-    const fields = { name, color, role, lastSeenAt: now() };
-    if (existing) return store().update("presence", { documentId, actorId }, fields);
-    return store().insert("presence", { id: newId(), documentId, actorId, ...fields });
-  },
+  // Atomic upsert keyed on { documentId, actorId } — a single actor always maps
+  // to exactly one presence row, even when two of their tabs (or a StrictMode
+  // double-mount) fire their first sync at the same instant.
+  touch: ({ documentId, actorId, name, color, role }) =>
+    store().upsert("presence", { documentId, actorId }, { name, color, role, lastSeenAt: now() }),
   remove: (documentId, actorId) => store().removeWhere("presence", { documentId, actorId }),
 };
 

@@ -74,9 +74,21 @@ export async function POST(request, { params }) {
     });
   }
   const cutoff = Date.now() - PEER_TTL_MS;
-  const peers = (await Presence.list(id))
-    .filter((p) => new Date(p.lastSeenAt).getTime() > cutoff)
-    .map((p) => ({ id: p.actorId, name: p.name, color: p.color, role: p.role }));
+  // Collapse to one entry per actor (keeping the most recently seen row) so the
+  // avatar list never carries duplicate ids — a stray duplicate presence row
+  // left by an older client would otherwise render as two identical avatars.
+  const byActor = new Map();
+  for (const p of await Presence.list(id)) {
+    if (new Date(p.lastSeenAt).getTime() <= cutoff) continue;
+    const prev = byActor.get(p.actorId);
+    if (!prev || new Date(p.lastSeenAt) > new Date(prev.lastSeenAt)) byActor.set(p.actorId, p);
+  }
+  const peers = [...byActor.values()].map((p) => ({
+    id: p.actorId,
+    name: p.name,
+    color: p.color,
+    role: p.role,
+  }));
 
   return Response.json({
     seq: state.seq || 0,
