@@ -215,51 +215,60 @@ function getContext() {
 }
 
 function runAssist(message) {
-  message = String(message || '').trim();
-  if (!message) return { ok: false, error: 'Type an instruction first.' };
-
-  var email = userEmail_();
-  if (!email) {
-    return { ok: false, error: "Couldn't read your Google account email — this add-on is meant for use inside your own workspace." };
-  }
-
-  var target = readTarget_();
-  var doc = DocumentApp.getActiveDocument();
-
-  var data;
+  // Stage-tracked so a failure surfaces WHERE it broke: [identity] / [config] /
+  // [read-doc] / [backend] / [apply]. Every Google/Apps-Script exception is
+  // caught and returned as a clean message instead of a raw server error.
+  var stage = 'start';
   try {
-    data = backend_('/api/gdocs/assist', {
+    message = String(message || '').trim();
+    if (!message) return { ok: false, error: 'Type an instruction first.' };
+
+    stage = 'identity';
+    var email = userEmail_();
+    if (!email) {
+      return { ok: false, error: "Couldn't read your Google account email — open this doc under the same account that installed the add-on." };
+    }
+
+    stage = 'config';
+    var cfg = config_();
+    if (!cfg.baseUrl || !cfg.secret) {
+      return { ok: false, error: 'Not configured: set APP_BASE_URL and GDOCS_ADDON_SECRET in Project Settings → Script Properties, then Save.' };
+    }
+
+    stage = 'read-doc';
+    var target = readTarget_();
+    var title = DocumentApp.getActiveDocument().getName();
+
+    stage = 'backend';
+    var data = backend_('/api/gdocs/assist', {
       googleUserId: email,
-      title: doc.getName(),
+      title: title,
       html: linesToHtml_(target.lines),
       message: message,
     });
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
-  }
 
-  if (data.ok === false && data.code === 'not_linked') {
-    return { ok: false, notLinked: true, connectUrl: data.connectUrl, error: 'Connect your SuperDocs account to continue.' };
-  }
-  if (data.ok === false) {
-    return { ok: false, error: data.message || 'SuperDocs could not complete that request.' };
-  }
-
-  if (data.changed && typeof data.html === 'string') {
-    try {
-      applyLines_(target.range, htmlToLines_(data.html));
-    } catch (err) {
-      return { ok: false, error: 'Edited, but writing back into the doc failed: ' + String(err.message || err) };
+    if (data.ok === false && data.code === 'not_linked') {
+      return { ok: false, notLinked: true, connectUrl: data.connectUrl, error: 'Connect your SuperDocs account to continue.' };
     }
-  }
+    if (data.ok === false) {
+      return { ok: false, error: data.message || 'SuperDocs could not complete that request.' };
+    }
 
-  return {
-    ok: true,
-    changed: !!data.changed,
-    reply: data.reply || '',
-    summary: data.summary || '',
-    scope: target.range ? 'selection' : 'document',
-  };
+    stage = 'apply';
+    if (data.changed && typeof data.html === 'string') {
+      applyLines_(target.range, htmlToLines_(data.html));
+    }
+
+    return {
+      ok: true,
+      changed: !!data.changed,
+      reply: data.reply || '',
+      summary: data.summary || '',
+      scope: target.range ? 'selection' : 'document',
+    };
+  } catch (err) {
+    return { ok: false, error: '[' + stage + '] ' + String((err && err.message) || err) };
+  }
 }
 
 function getConnectUrl() {
