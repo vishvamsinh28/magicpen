@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "SuperDocs — AI document editor",
   description:
-    "Edit documents in place with AI. Upload PDF, DOCX, Markdown and more — SuperDocs edits only what you ask for, preserving your formatting.",
+    "Edit documents in place with AI. Bring in a document, ask in plain English — SuperDocs edits only what you ask for, preserving your formatting.",
 };
 
 export default function RootLayout({ children }) {

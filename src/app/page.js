@@ -6,7 +6,7 @@ import { getUserFromRequest } from "@/lib/auth";
 export const metadata = {
   title: "SuperDocs — Edit documents with AI, in place",
   description:
-    "Upload a PDF or Word file, ask in plain English, and SuperDocs edits only what you ask for — formatting, tables, and footnotes survive. Export back to Word when you're done.",
+    "Upload a document, ask in plain English, and SuperDocs edits only what you ask for — formatting, tables, and footnotes survive. Work on it from Slack or Google Docs, share a live link, commit versions, and leave with a real file.",
 };
 
 export default async function Home() {
