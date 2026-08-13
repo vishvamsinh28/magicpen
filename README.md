@@ -1,5 +1,15 @@
 # SuperDocs
 
+> **This project is a clone of [SuperDoc](https://superdocs.app/)** — rebuilt to be more
+> efficient and more reliable than the original. Edits are applied as block-level
+> operations instead of regenerating the document, so a change costs a fraction of the
+> tokens and leaves every untouched block byte-for-byte intact; every dependency
+> (database, storage, AI key) degrades gracefully instead of failing; and every operation
+> is sanitised, versioned and undoable.
+>
+> It also adds features the original doesn't have — most notably a **Slack bot** and a
+> **Google Docs add-on**. Not affiliated with or endorsed by the SuperDoc project.
+
 AI-powered document editing. Upload a document (or create one from chat), tell the
 assistant what to change in plain English, and it edits **in place** — only the relevant
 blocks are touched, so headings, tables, links, and formatting survive.
@@ -23,6 +33,29 @@ MongoDB. Auth is first-party (scrypt password hashing + JWT sessions); Supabase 
 - 🔄 **Changes history** per document with one-click restore
 - 🗑️ **Bulk actions** — multi-select documents or chats and delete them in one pass
 - 💬 **Chat history**, multi-document tabs, zoom, mobile-responsive layout
+
+## Beyond the original
+
+These are additions to the SuperDoc experience this project clones — they are **not**
+part of the original:
+
+- 💬 **Slack bot** — `/superdoc new` to create, `list` / `open` to pick up an existing
+  document. Every document gets its own thread; reply to the thread to edit it and the
+  updated file is posted back. Drag a file into the chat to import it. Thread reactions:
+  `:commit:` to snapshot, `:undo:` to revert, `:send:` for the file as docx / md / html /
+  txt. You can also just ask questions about the document.
+  Setup: create a Slack app (Socket Mode **off**), point events at
+  `APP_BASE_URL/api/slack/events`, interactivity at `/api/slack/interactivity`, the
+  `/superdoc` command at `/api/slack/commands`, and OAuth redirect at `/api/slack/oauth`
+  — the exact scopes are listed in `.env.example`.
+- 📄 **Google Docs add-on** — a sidebar inside the doc you're already in
+  (**Extensions → SuperDocs**). Selection-first: highlight a paragraph and only that
+  paragraph changes; highlight nothing and it edits the whole document. One-time account
+  link, so it's the same SuperDocs account as the web app and Slack. The add-on is a
+  separate Google Apps Script project in [`google-addon/`](google-addon/README.md) — see
+  that README for deployment; it calls this app's `/api/gdocs/*` endpoints over HTTPS.
+
+Both are optional and stay disabled until their environment variables are set.
 
 ## Pages
 
@@ -53,11 +86,16 @@ even with an empty `.env.local` (see fallbacks below).
 | `MONGODB_URI`, `MONGODB_DB` | MongoDB connection — stores users, documents, chats, changes; **if unset, a local JSON store in `.data/` is used (dev only)** |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Optional, storage only — archives original uploads in a private bucket, server-side |
 | `SUPABASE_STORAGE_BUCKET` | Bucket name (default `superdocs`, auto-created) |
+| `SLACK_SIGNING_SECRET`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | Optional — enable the Slack bot; leave empty to disable |
+| `SLACK_BOT_TOKEN` | Optional single-workspace fallback (`xoxb-…`) used when there's no stored OAuth install |
+| `GDOCS_ADDON_SECRET` | Optional — shared secret the Google Docs add-on sends (`X-SuperDocs-Addon`); the same value goes in the Apps Script project's Script Properties |
+| `APP_BASE_URL` | Public HTTPS origin, no trailing slash — required by Slack and the Docs add-on (use a tunnel like `ngrok http 3000` in dev) |
 | `MOCK_AI=1` | Try the whole app with canned AI responses, no key needed |
 
 Everything degrades gracefully: without MongoDB you get a JSON file store, without
-Supabase uploads simply aren't archived, and without a Gemini key the chat tells you
-exactly what's missing (or set `MOCK_AI=1`).
+Supabase uploads simply aren't archived, without the Slack/Google keys those
+integrations stay off, and without a Gemini key the chat tells you exactly what's
+missing (or set `MOCK_AI=1`).
 
 ## How auth works
 
