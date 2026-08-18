@@ -7,6 +7,10 @@ import { ArrowLeft, Eye, EyeOff, Loader2, TriangleAlert } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { apiFetch } from "@/lib/client-utils";
 
+/**
+ * Labeled form input. With `password` it renders as a password field with a
+ * show/hide toggle (overriding `type`); all fields are required by default.
+ */
 function Field({ label, type = "text", value, onChange, placeholder, autoComplete, autoFocus, minLength, password = false }) {
   const [show, setShow] = useState(false);
   return (
@@ -42,6 +46,11 @@ function Field({ label, type = "text", value, onChange, placeholder, autoComplet
   );
 }
 
+/**
+ * Sign-in / registration form (`mode` picks which). Submission errors surface
+ * inline below the fields; an already-authenticated visitor is bounced
+ * straight to /app.
+ */
 export default function AuthPage({ mode = "login" }) {
   const router = useRouter();
   const isRegister = mode === "register";
@@ -55,7 +64,10 @@ export default function AuthPage({ mode = "login" }) {
   useEffect(() => {
     apiFetch("/api/auth/me")
       .then(() => router.replace("/app"))
-      .catch(() => {});
+      .catch(() => {
+        // A 401 is the expected answer for a signed-out visitor — stay on the
+        // form; surfacing it would show an error on every fresh page load.
+      });
   }, [router]);
 
   const submit = async (e) => {
@@ -70,6 +82,7 @@ export default function AuthPage({ mode = "login" }) {
           isRegister ? { name, email, password } : { email, password }
         ),
       });
+      // Success: keep the spinner running through the client-side redirect.
       router.push("/app");
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");

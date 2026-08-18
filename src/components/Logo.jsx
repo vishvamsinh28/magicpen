@@ -1,4 +1,8 @@
-// The MagicPen mark — a fountain-pen nib with a magic sparkle.
+/**
+ * The MagicPen mark — a fountain-pen nib with a magic sparkle, as inline SVG.
+ * Decorative only (aria-hidden); pair it with visible text where a label is
+ * needed. Server-safe: no client directive so it renders anywhere.
+ */
 export function LogoMark({ size = 34 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
@@ -26,6 +30,10 @@ export function LogoMark({ size = 34 }) {
   );
 }
 
+/**
+ * Full lockup: the mark plus the "MagicPen" wordmark.
+ * `compact` drops the wordmark (and shrinks the mark) for tight headers.
+ */
 export default function Logo({ compact = false }) {
   return (
     <span className="flex select-none items-center gap-2">

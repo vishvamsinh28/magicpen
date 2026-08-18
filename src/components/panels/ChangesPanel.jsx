@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { History, X, RotateCcw, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { History, RotateCcw, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import DiffList from "@/components/DiffView";
 import { apiFetch, timeAgo } from "@/lib/client-utils";
 import { buildDiffItems } from "@/lib/diff";
+import { PanelHeader } from "./PanelChrome";
 
+// Badge palette per change status; unknown statuses fall back to "applied".
 const STATUS_STYLES = {
   applied: "bg-[#e8f3ec] text-good",
   rejected: "bg-canvas text-muted",
@@ -27,6 +29,11 @@ function ChangeDiff({ change }) {
   );
 }
 
+/**
+ * Audit trail of AI edits on the active document: each change shows status,
+ * an expandable diff, and (when a beforeHtml snapshot exists) a restore
+ * action that rolls the document back to the state before that change.
+ */
 export default function ChangesPanel() {
   const ws = useWorkspace();
   const { activeDoc, activeDocId, changesVersion } = ws;
@@ -45,30 +52,26 @@ export default function ChangesPanel() {
     setLoading(true);
     apiFetch(`/api/changes?documentId=${activeDocId}`)
       .then((data) => !cancelled && setChanges(data.changes || []))
-      .catch(() => !cancelled && setChanges([]))
+      .catch((e) => {
+        if (cancelled) return;
+        ws.showToast(e.message);
+        setChanges([]);
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDocId, changesVersion]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-paper">
-      <div className="flex shrink-0 items-center justify-between border-b border-line py-2 pl-3 pr-2">
-        <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-ink">
-          <History size={15} className="shrink-0" />
-          AI changes
-          {activeDoc && <span className="max-w-36 truncate font-normal text-muted">· {activeDoc.title}</span>}
-        </span>
-        <button
-          onClick={ws.closePanel}
-          title="Close panel"
-          aria-label="Close panel"
-          className="shrink-0 rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
-        >
-          <X size={16} />
-        </button>
-      </div>
+      <PanelHeader
+        icon={<History size={15} className="shrink-0" />}
+        title="AI changes"
+        suffix={activeDoc && <span className="max-w-36 truncate font-normal text-muted">· {activeDoc.title}</span>}
+        onClose={ws.closePanel}
+      />
 
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-3.5">
         {!activeDocId && (

@@ -13,17 +13,21 @@ import { signConnectState, gdocsConnectUrl } from "@/lib/gdocs";
 
 /* --------------------------- identity & linking --------------------------- */
 
-// Resolve the MagicPen account linked to a Google identity (the add-on user's
-// email). Returns null when the user hasn't connected an account yet.
+/**
+ * Resolves the MagicPen account linked to a Google identity (the add-on
+ * user's email). Returns null when the user hasn't connected an account yet.
+ */
 export async function resolveUserByGoogleId(googleUserId) {
   const link = await GoogleLinks.get(googleUserId);
   if (!link?.userId) return null;
   return Users.get(link.userId);
 }
 
-// Signs the short-lived connect link the add-on shows when the Google user
-// hasn't linked a MagicPen account. Clicking it opens the browser connect flow
-// (/gdocs/connect), which proves their MagicPen session and writes the link.
+/**
+ * Signs the short-lived connect link the add-on shows when the Google user
+ * hasn't linked a MagicPen account. Clicking it opens the browser connect flow
+ * (/gdocs/connect), which proves their MagicPen session and writes the link.
+ */
 export async function connectUrlForGoogleUser(googleUserId) {
   const state = await signConnectState({ googleUserId });
   return gdocsConnectUrl(state);
@@ -31,13 +35,17 @@ export async function connectUrlForGoogleUser(googleUserId) {
 
 /* ------------------------------- assist ----------------------------------- */
 
-// Runs one AI turn against the doc's HTML. Stateless: no history is threaded in,
-// so each instruction stands alone (the doc content carries the context). To
-// add follow-up memory later, bind the doc to a Chat keyed by (user, docId) and
-// pass Messages.list here — the same shape as SlackThreads/handleMessage.
-//
-// Returns the new full-document HTML plus a human-readable reply/summary for the
-// sidebar. `changed` is false when the assistant only answered a question.
+/**
+ * Runs one AI turn against the doc's HTML. Stateless: no history is threaded
+ * in, so each instruction stands alone (the doc content carries the context).
+ * To add follow-up memory later, bind the doc to a Chat keyed by (user, docId)
+ * and pass Messages.list here — the same shape as SlackThreads/handleMessage.
+ *
+ * Returns the new full-document HTML plus a human-readable reply/summary for
+ * the sidebar. `changed` is false when the assistant only answered a question.
+ * Assistant errors (ai_not_configured / ai_quota / SDK failures) propagate to
+ * the route, which maps them to the sidebar's error message.
+ */
 export async function assistOnDoc({ title, html, message, mode = "balanced" }) {
   const beforeHtml = html || "";
   const result = await runAssistant({

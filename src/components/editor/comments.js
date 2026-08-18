@@ -10,10 +10,14 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 // with comment-only access can annotate, and anchors survive edits made by
 // other people instead of conflicting with them.
 
+/** Key for the comment-highlight plugin; setMeta with it to push thread state. */
 export const commentsPluginKey = new PluginKey("sdComments");
 
-// Flattens the document to plain text alongside a char-index -> doc-position
-// map, so offsets stay meaningful across formatting changes.
+/**
+ * Flattens the document to plain text alongside a char-index -> doc-position
+ * map, so offsets stay meaningful across formatting changes. Non-text inlines
+ * become space padding to keep indexes aligned with node sizes.
+ */
 export function docTextIndex(doc) {
   let text = "";
   const runs = [];
@@ -33,6 +37,7 @@ export function docTextIndex(doc) {
   return { text, runs };
 }
 
+// Doc position of a char index, or null when it falls outside every text run.
 const posAt = (index, charIndex) => {
   for (const run of index.runs) {
     if (charIndex >= run.start && charIndex < run.start + run.len) {
@@ -42,7 +47,10 @@ const posAt = (index, charIndex) => {
   return null;
 };
 
-// Char offset of a document position — used when a comment is created.
+/**
+ * Char offset of a document position — used when a comment is created.
+ * Positions between runs snap to the end of the closest preceding run.
+ */
 export function offsetOfPos(index, pos) {
   let best = 0;
   for (const run of index.runs) {
@@ -52,7 +60,11 @@ export function offsetOfPos(index, pos) {
   return best;
 }
 
-// The occurrence of `quote` closest to where the comment was originally made.
+/**
+ * Doc range of the occurrence of `quote` closest to where the comment was
+ * originally made (its stored anchorStart), or null when the quote no longer
+ * exists in the document. Capped at 200 candidate occurrences.
+ */
 export function findQuoteRange(index, quote, anchorStart) {
   if (!quote) return null;
   const needle = quote.trim();
@@ -74,6 +86,11 @@ export function findQuoteRange(index, quote, anchorStart) {
   return { from, to: to + 1 };
 }
 
+/**
+ * Decorates unresolved comment threads with mp-comment-hit highlights (the
+ * active thread gets mp-comment-hit-active) and dispatches an mp-comment-click
+ * DOM event when highlighted text is clicked, for the sidebar to pick up.
+ */
 export const CommentHighlights = Extension.create({
   name: "sdComments",
 
@@ -110,12 +127,12 @@ export const CommentHighlights = Extension.create({
         },
         props: {
           decorations(state) {
-            return commentsPluginKey.getState(state).deco;
+            return commentsPluginKey.getState(state)?.deco;
           },
           // Clicking highlighted text selects that thread in the sidebar.
           handleClick(view, pos) {
             const state = commentsPluginKey.getState(view.state);
-            if (!state.threads.length) return false;
+            if (!state?.threads?.length) return false;
             const index = docTextIndex(view.state.doc);
             for (const thread of state.threads) {
               if (thread.resolved) continue;
@@ -135,7 +152,11 @@ export const CommentHighlights = Extension.create({
   },
 });
 
-// Push the current thread list / selection into the plugin.
+/**
+ * Push the current thread list / selection into the plugin. Skipped silently
+ * for a missing or destroyed editor; the transaction stays out of undo history
+ * so toggling threads never eats a Ctrl+Z step.
+ */
 export function setCommentState(editor, { threads, activeId }) {
   if (!editor || editor.isDestroyed || !editor.view) return;
   const tr = editor.state.tr.setMeta(commentsPluginKey, { threads, activeId });

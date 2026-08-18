@@ -4,9 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 
-// Text-input sibling of ConfirmDialog — replaces window.prompt for the same
-// reason: browsers silently suppress repeated native dialogs. Enter submits,
-// Escape cancels, and the prefilled value opens selected like window.prompt.
+/**
+ * Text-input sibling of ConfirmDialog — replaces window.prompt for the same
+ * reason: browsers silently suppress repeated native dialogs. Enter submits,
+ * Escape cancels, and the prefilled value opens selected like window.prompt.
+ * Submit is blocked on blank input unless `allowEmpty`; while `busy` the
+ * form is inert. onSubmit receives the raw (untrimmed) value — trimming is
+ * the caller's choice, matching window.prompt.
+ */
 export default function PromptDialog({
   open,
   title,
@@ -46,6 +51,8 @@ export default function PromptDialog({
       cancelAnimationFrame(frame);
       window.removeEventListener("keydown", onKey, true);
     };
+    // Deps limited to `open` on purpose: defaultValue is a snapshot taken
+    // when the dialog opens, not a controlled binding that resets typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 

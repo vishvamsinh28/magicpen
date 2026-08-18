@@ -1,7 +1,11 @@
 import sanitizeHtml from "sanitize-html";
 
-// Every piece of HTML that enters the system (uploads, AI output, exports)
-// passes through here so the editor and stored docs stay script-free.
+/**
+ * HTML sanitization for the whole app. Every piece of HTML that enters the
+ * system (uploads, AI output, exports) passes through here so the editor and
+ * stored docs stay script-free. The allowlists below define exactly what the
+ * editor can represent — widen them only together with the editor schema.
+ */
 
 const STYLE_PROPS = {
   color: [/^.*$/],
@@ -23,7 +27,10 @@ const STYLE_PROPS = {
   "break-after": [/^page$/],
 };
 
-// Exported so the AI layer can detect (and retry) styles that would be stripped.
+/**
+ * Names of the CSS properties sanitization keeps. Exported so the AI layer
+ * can detect (and retry) styles that would be stripped.
+ */
 export const ALLOWED_STYLE_PROP_NAMES = Object.keys(STYLE_PROPS);
 
 const OPTIONS = {
@@ -58,11 +65,20 @@ const OPTIONS = {
   },
 };
 
+/**
+ * Sanitize document HTML against the editor's allowlist. Strips scripts,
+ * event handlers, unknown tags/attributes, and disallowed inline styles;
+ * returns "" for empty input.
+ */
 export function cleanDocHtml(html) {
   if (!html) return "";
   return sanitizeHtml(String(html), OPTIONS).trim();
 }
 
+/**
+ * HTML → readable plain text: block boundaries become newlines, entities are
+ * decoded, runs of blank lines collapse. Used for AI context and .txt export.
+ */
 export function htmlToText(html) {
   if (!html) return "";
   const withBreaks = String(html)
@@ -75,6 +91,10 @@ export function htmlToText(html) {
     .trim();
 }
 
+/**
+ * Escape a string for safe interpolation into HTML text or attribute values
+ * (&, <, >, and double quotes).
+ */
 export function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")

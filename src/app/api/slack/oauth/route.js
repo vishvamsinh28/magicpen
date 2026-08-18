@@ -9,6 +9,8 @@ import { escapeHtml } from "@/lib/sanitize";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Minimal self-contained result page — no app shell, since the visitor arrives
+// from Slack's OAuth flow in a bare tab. All dynamic text is escaped.
 function htmlPage({ title, heading, body }) {
   return new Response(
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
@@ -21,6 +23,11 @@ function htmlPage({ title, heading, body }) {
   );
 }
 
+/**
+ * GET /api/slack/oauth — complete a workspace install.
+ * Exchanges Slack's one-time ?code for a bot token and stores it per team;
+ * every outcome (cancelled, missing code, failure, success) renders HTML.
+ */
 export async function GET(request) {
   const params = new URL(request.url).searchParams;
 
@@ -43,7 +50,7 @@ export async function GET(request) {
 
   try {
     const install = await exchangeInstallCode(code);
-    if (!install.teamId || !install.botToken) throw new Error("incomplete install response");
+    if (!install?.teamId || !install?.botToken) throw new Error("incomplete install response");
     await SlackInstalls.save(install);
 
     return htmlPage({
@@ -60,7 +67,7 @@ export async function GET(request) {
     return htmlPage({
       title: "Installation failed",
       heading: "Installation failed",
-      body: `<p>We couldn't complete the installation (${escapeHtml(err.code || err.message || "unknown error")}). Please try again.</p>`,
+      body: `<p>We couldn't complete the installation (${escapeHtml(err?.code || err?.message || "unknown error")}). Please try again.</p>`,
     });
   }
 }

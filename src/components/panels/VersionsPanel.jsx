@@ -1,22 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  GitCommit, X, Loader2, Eye, RotateCcw, MoreHorizontal, Pencil, Trash2, Plus,
-} from "lucide-react";
+import { GitCommit, Loader2, Plus } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PromptDialog from "@/components/ui/PromptDialog";
-import Dropdown from "@/components/ui/Dropdown";
-import { apiFetch, timeAgo } from "@/lib/client-utils";
+import { apiFetch } from "@/lib/client-utils";
+import { PanelHeader } from "./PanelChrome";
+import VersionCard, { commitTitle } from "./VersionCard";
 
-const commitTitle = (version) =>
-  version.label ||
-  `Commit — ${new Date(version.createdAt).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  })}`;
-
+/**
+ * Version history for the active document: commit-on-purpose snapshots with
+ * preview, restore, rename, and delete. Reloads whenever the active document
+ * or versionsVersion (bumped by context after a new commit) changes; a shared
+ * `busy` flag serializes the restore / delete / rename dialogs.
+ */
 export default function VersionsPanel() {
   const ws = useWorkspace();
   const { activeDoc, activeDocId, versionsVersion, versionPreview } = ws;
@@ -36,30 +34,26 @@ export default function VersionsPanel() {
     setLoading(true);
     apiFetch(`/api/versions?documentId=${activeDocId}`)
       .then((data) => !cancelled && setVersions(data.versions || []))
-      .catch(() => !cancelled && setVersions([]))
+      .catch((e) => {
+        if (cancelled) return;
+        ws.showToast(e.message);
+        setVersions([]);
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDocId, versionsVersion]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-paper">
-      <div className="flex shrink-0 items-center justify-between border-b border-line py-2 pl-3 pr-2">
-        <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-ink">
-          <GitCommit size={15} className="shrink-0" />
-          Version history
-          {activeDoc && <span className="max-w-32 truncate font-normal text-muted">· {activeDoc.title}</span>}
-        </span>
-        <button
-          onClick={ws.closePanel}
-          title="Close panel"
-          aria-label="Close panel"
-          className="shrink-0 rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
-        >
-          <X size={16} />
-        </button>
-      </div>
+      <PanelHeader
+        icon={<GitCommit size={15} className="shrink-0" />}
+        title="Version history"
+        suffix={activeDoc && <span className="max-w-32 truncate font-normal text-muted">· {activeDoc.title}</span>}
+        onClose={ws.closePanel}
+      />
 
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-3.5">
         {!activeDocId && (
@@ -93,57 +87,19 @@ export default function VersionsPanel() {
         )}
 
         {versions.map((version) => (
-          <div
+          <VersionCard
             key={version.id}
-            className={`rounded-xl border p-3 shadow-card ${
-              versionPreview?.id === version.id ? "border-accent bg-accent-soft/40" : "border-line bg-paper"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium leading-snug text-ink">
-                <GitCommit size={13} className="shrink-0 text-accent" />
-                <span className="truncate">{commitTitle(version)}</span>
-              </p>
-              <Dropdown
-                align="right"
-                items={[
-                  { label: "Rename", icon: <Pencil size={14} />, onSelect: () => setRenaming(version) },
-                  { label: "Delete", icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirmDelete(version) },
-                ]}
-                trigger={
-                  <button
-                    aria-label={`Commit options: ${commitTitle(version)}`}
-                    className="rounded-md p-1 text-muted transition-colors hover:bg-canvas hover:text-ink"
-                  >
-                    <MoreHorizontal size={15} />
-                  </button>
-                }
-              />
-            </div>
-            <div className="mt-1.5 flex items-center justify-between">
-              <p className="text-[11.5px] text-muted">{timeAgo(version.createdAt)}</p>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() =>
-                    versionPreview?.id === version.id
-                      ? ws.closeVersionPreview()
-                      : ws.openVersionPreview(version)
-                  }
-                  className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
-                >
-                  <Eye size={11} />
-                  {versionPreview?.id === version.id ? "Close preview" : "Preview"}
-                </button>
-                <button
-                  onClick={() => setConfirmRestore(version)}
-                  className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
-                >
-                  <RotateCcw size={11} />
-                  Restore
-                </button>
-              </div>
-            </div>
-          </div>
+            version={version}
+            previewing={versionPreview?.id === version.id}
+            onTogglePreview={() =>
+              versionPreview?.id === version.id
+                ? ws.closeVersionPreview()
+                : ws.openVersionPreview(version)
+            }
+            onRestore={() => setConfirmRestore(version)}
+            onRename={() => setRenaming(version)}
+            onDelete={() => setConfirmDelete(version)}
+          />
         ))}
       </div>
 

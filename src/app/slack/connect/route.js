@@ -11,6 +11,8 @@ import { escapeHtml } from "@/lib/sanitize";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Bare-tab result page (the visitor arrives from Slack, outside the app
+// shell). All dynamic text is escaped before interpolation.
 function html(title, heading, body) {
   return new Response(
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
@@ -36,6 +38,11 @@ const signInFirst = () =>
       `<p><a href="${escapeHtml(appBaseUrl())}/login">Sign in to MagicPen →</a></p>`
   );
 
+/**
+ * GET /slack/connect?state=… — show the "link this account" confirmation.
+ * The signed state proves the Slack identity; the browser cookie proves the
+ * MagicPen session. `?linked=1` renders the post-link success page.
+ */
 export async function GET(request) {
   const params = new URL(request.url).searchParams;
   if (params.get("linked") === "1") {
@@ -60,6 +67,11 @@ export async function GET(request) {
   );
 }
 
+/**
+ * POST /slack/connect — perform the (team, slackUser) → account link.
+ * Re-verifies the state token from the form so an expired confirmation page
+ * can't complete a link.
+ */
 export async function POST(request) {
   const form = await request.formData().catch(() => null);
   const state = form?.get("state");
@@ -69,11 +81,20 @@ export async function POST(request) {
   const user = await getUserFromRequest(request);
   if (!user) return signInFirst();
 
-  await SlackLinks.link({
-    teamId: verified.teamId,
-    slackUserId: verified.slackUserId,
-    userId: user.id,
-  });
+  try {
+    await SlackLinks.link({
+      teamId: verified.teamId,
+      slackUserId: verified.slackUserId,
+      userId: user.id,
+    });
+  } catch (err) {
+    console.error("[magicpen/slack] account link failed:", err);
+    return html(
+      "Something went wrong",
+      "Something went wrong",
+      `<p>We couldn't link your account. Head back to Slack and try again.</p>`
+    );
+  }
 
   return html(
     "Connected",

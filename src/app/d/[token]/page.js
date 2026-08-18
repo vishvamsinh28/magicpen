@@ -6,6 +6,11 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * /d/[token] — viewer for a shared document link.
+ * Only unwraps the async route params; token validation and access control
+ * happen in SharedDoc via /api/share/[token].
+ */
 export default async function SharedDocumentPage({ params }) {
   const { token } = await params;
   return <SharedDoc token={token} />;

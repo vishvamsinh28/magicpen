@@ -2,10 +2,13 @@
 
 import { Node } from "@tiptap/core";
 
-// Manual page break. Persists as a bare <div style="page-break-after: always">
-// (the only attribute the sanitizer keeps), which browsers honor natively when
-// the document is printed / saved as PDF. In the editor it renders with a
-// data-page-break attribute that globals.css turns into a labeled dashed rule.
+/**
+ * Manual page break node (inserted via the insertPageBreak command). Persists
+ * as a bare <div style="page-break-after: always"> — the only attribute the
+ * sanitizer keeps — which browsers honor natively when the document is printed
+ * or saved as PDF. In the editor it renders with a data-page-break attribute
+ * that globals.css turns into a labeled dashed rule.
+ */
 const PageBreak = Node.create({
   name: "pageBreak",
   group: "block",

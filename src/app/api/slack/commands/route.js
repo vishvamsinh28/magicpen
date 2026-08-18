@@ -12,11 +12,22 @@ export const maxDuration = 60;
 
 const ephemeral = (payload) => Response.json({ response_type: "ephemeral", ...payload });
 
+/**
+ * POST /api/slack/commands — handle `/magicpen` slash commands.
+ * `new`/`open`/`clear` ack instantly and finish in after(); everything else
+ * runs inline. All replies are ephemeral so channels stay clean.
+ */
 export async function POST(request) {
-  const { ok, body } = await readVerified(request);
-  if (!ok) return new Response("bad signature", { status: 401 });
+  let verified;
+  try {
+    verified = await readVerified(request);
+  } catch (err) {
+    console.error("[magicpen/slack] slash payload read failed:", err);
+    return new Response("internal error", { status: 500 });
+  }
+  if (!verified.ok) return new Response("bad signature", { status: 401 });
 
-  const form = new URLSearchParams(body);
+  const form = new URLSearchParams(verified.body);
   const teamId = form.get("team_id");
   const slackUserId = form.get("user_id");
   const channel = form.get("channel_id");
@@ -30,48 +41,42 @@ export async function POST(request) {
       body: JSON.stringify({ response_type: "ephemeral", text: "The bot isn't fully installed yet — no bot token for this workspace." }),
     }).catch(() => {});
 
-  // Create a new, empty document (named by the user) + post it as a thread.
-  if (sub === "new") {
-    const name = text.trim().replace(/^new\s*/i, "");
+  // Slow subcommands share one shape: ack now, do the work in after(), and
+  // report failures through the response_url (never by holding the ack).
+  const ackAndRun = (ackText, label, work) => {
     after(async () => {
       try {
         const botToken = await botTokenForTeam(teamId);
         if (!botToken) { await notInstalled(); return; }
-        await createDocFromSlash({ teamId, channel, slackUserId, name, botToken, responseUrl });
+        await work(botToken);
       } catch (err) {
-        console.error("[magicpen/slack] slash 'new' failed:", err);
+        console.error(`[magicpen/slack] slash '${label}' failed:`, err);
       }
     });
-    return ephemeral({ text: "📄 Creating your document…" });
+    return ephemeral({ text: ackText });
+  };
+
+  // Create a new, empty document (named by the user) + post it as a thread.
+  if (sub === "new") {
+    const name = text.trim().replace(/^new\s*/i, "");
+    return ackAndRun("📄 Creating your document…", "new", (botToken) =>
+      createDocFromSlash({ teamId, channel, slackUserId, name, botToken, responseUrl })
+    );
   }
 
   // Open an existing document as a working thread.
   if (sub === "open") {
     const query = text.trim().replace(/^open\s*/i, "");
-    after(async () => {
-      try {
-        const botToken = await botTokenForTeam(teamId);
-        if (!botToken) { await notInstalled(); return; }
-        await openDocFromSlash({ teamId, channel, slackUserId, query, botToken, responseUrl });
-      } catch (err) {
-        console.error("[magicpen/slack] slash 'open' failed:", err);
-      }
-    });
-    return ephemeral({ text: "📂 Opening…" });
+    return ackAndRun("📂 Opening…", "open", (botToken) =>
+      openDocFromSlash({ teamId, channel, slackUserId, query, botToken, responseUrl })
+    );
   }
 
   // Slow path: delete the bot's messages/files in this conversation.
   if (sub === "clear") {
-    after(async () => {
-      try {
-        const botToken = await botTokenForTeam(teamId);
-        if (!botToken) { await notInstalled(); return; }
-        await clearConversation({ teamId, channel, botToken, responseUrl });
-      } catch (err) {
-        console.error("[magicpen/slack] slash 'clear' failed:", err);
-      }
-    });
-    return ephemeral({ text: "🧹 Clearing my messages…" });
+    return ackAndRun("🧹 Clearing my messages…", "clear", (botToken) =>
+      clearConversation({ teamId, channel, botToken, responseUrl })
+    );
   }
 
   // Fast path: compute and return directly.

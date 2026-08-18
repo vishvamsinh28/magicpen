@@ -12,6 +12,8 @@ import { escapeHtml } from "@/lib/sanitize";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Bare-tab result page (the visitor arrives from the add-on sidebar, outside
+// the app shell). All dynamic text is escaped before interpolation.
 function html(title, heading, body) {
   return new Response(
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
@@ -37,6 +39,11 @@ const signInFirst = () =>
       `<p><a href="${escapeHtml(appBaseUrl())}/login">Sign in to MagicPen →</a></p>`
   );
 
+/**
+ * GET /gdocs/connect?state=… — show the "link this account" confirmation.
+ * The signed state proves the Google identity; the browser cookie proves the
+ * MagicPen session. `?linked=1` renders the post-link success page.
+ */
 export async function GET(request) {
   const params = new URL(request.url).searchParams;
   if (params.get("linked") === "1") {
@@ -61,6 +68,11 @@ export async function GET(request) {
   );
 }
 
+/**
+ * POST /gdocs/connect — perform the googleUserId → account link.
+ * Re-verifies the state token from the form (so an expired confirmation page
+ * can't complete a link) and normalizes the email-shaped id to lowercase.
+ */
 export async function POST(request) {
   const form = await request.formData().catch(() => null);
   const state = form?.get("state");
@@ -70,10 +82,19 @@ export async function POST(request) {
   const user = await getUserFromRequest(request);
   if (!user) return signInFirst();
 
-  await GoogleLinks.link({
-    googleUserId: String(verified.googleUserId).trim().toLowerCase(),
-    userId: user.id,
-  });
+  try {
+    await GoogleLinks.link({
+      googleUserId: String(verified.googleUserId).trim().toLowerCase(),
+      userId: user.id,
+    });
+  } catch (err) {
+    console.error("[magicpen/gdocs] account link failed:", err);
+    return html(
+      "Something went wrong",
+      "Something went wrong",
+      `<p>We couldn't link your account. Head back to your Google Doc and try again.</p>`
+    );
+  }
 
   return html(
     "Connected",

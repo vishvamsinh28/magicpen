@@ -9,6 +9,11 @@ export const metadata = {
     "Upload a document, ask in plain English, and MagicPen edits only what you ask for — formatting, tables, and footnotes survive. Work on it from Slack or Google Docs, share a live link, commit versions, and leave with a real file.",
 };
 
+/**
+ * / — the marketing landing page.
+ * Signed-in visitors are redirected straight to /app; the redirect() call
+ * must stay outside any try/catch, since it works by throwing.
+ */
 export default async function Home() {
   // Signed-in users have no use for the marketing page — send them straight to
   // their workspace. Reuse the session verification from the API layer by

@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquare, Search, X, Check, Trash2, Loader2, Waypoints } from "lucide-react";
+import { MessageSquare, Trash2, Loader2 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { apiFetch, timeAgo } from "@/lib/client-utils";
+import { apiFetch } from "@/lib/client-utils";
+import { PanelHeader, PanelSearch } from "./PanelChrome";
+import HistoryChatRow from "./HistoryChatRow";
 
-// Past conversations as a right-side panel (same shell as the other panels —
-// no overlay). Picking a chat loads it and lands on the AI assistant panel.
+/**
+ * Past conversations as a right-side panel (same shell as the other panels —
+ * no overlay). Picking a chat loads it and lands on the AI assistant panel.
+ * Rows support single and batch delete; ws.deleteChat surfaces its own errors
+ * and returns a boolean, so the list only drops chats that really deleted.
+ */
 export default function HistoryPanel() {
   const ws = useWorkspace();
   const [chats, setChats] = useState(null);
@@ -45,6 +51,8 @@ export default function HistoryPanel() {
     ws.openPanel("chat");
   };
 
+  // Batch delete: only chats whose delete succeeded leave the selection and
+  // the list, so a partial failure keeps the failed rows visible.
   const removeSelected = async () => {
     if (batchDeleting || selected.size === 0) return;
     setBatchDeleting(true);
@@ -73,32 +81,14 @@ export default function HistoryPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-paper">
-      <div className="flex shrink-0 items-center justify-between gap-1 border-b border-line py-2 pl-3 pr-2">
-        <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-ink">
-          <MessageSquare size={15} className="shrink-0 text-accent" />
-          Chat history
-        </span>
-        <button
-          onClick={ws.closePanel}
-          title="Close panel"
-          aria-label="Close panel"
-          className="shrink-0 rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
-        >
-          <X size={16} />
-        </button>
-      </div>
+      <PanelHeader
+        gap
+        icon={<MessageSquare size={15} className="shrink-0 text-accent" />}
+        title="Chat history"
+        onClose={ws.closePanel}
+      />
 
-      <div className="shrink-0 px-3 pb-2 pt-2.5">
-        <div className="flex items-center gap-2 rounded-full border border-line-strong bg-paper px-3 py-1.5">
-          <Search size={14} className="shrink-0 text-muted" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search chats..."
-            className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-muted"
-          />
-        </div>
-      </div>
+      <PanelSearch value={query} onChange={setQuery} placeholder="Search chats..." />
 
       {selected.size > 0 && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line/70 px-3 pb-2">
@@ -134,53 +124,16 @@ export default function HistoryPanel() {
           </p>
         )}
         {filtered.map((chat) => (
-          <div
+          <HistoryChatRow
             key={chat.id}
-            onClick={() => (selected.size > 0 ? toggleSelect(chat.id) : open(chat))}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) =>
-              e.key === "Enter" && (selected.size > 0 ? toggleSelect(chat.id) : open(chat))
-            }
-            className={`group flex cursor-pointer items-start gap-2.5 px-3.5 py-2.5 transition-colors ${
-              chat.id === ws.chatId ? "bg-accent-soft" : "hover:bg-canvas"
-            }`}
-          >
-            <button
-              aria-label={selected.has(chat.id) ? `Deselect chat ${chat.title}` : `Select chat ${chat.title}`}
-              aria-pressed={selected.has(chat.id)}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleSelect(chat.id);
-              }}
-              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-[1.5px] transition-opacity ${
-                selected.has(chat.id)
-                  ? "border-accent bg-accent text-white"
-                  : `border-line-strong bg-paper text-transparent hover:text-muted ${
-                      selected.size > 0 ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                    }`
-              }`}
-            >
-              <Check size={12} strokeWidth={3} />
-            </button>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13.5px] font-medium text-ink">{chat.title}</p>
-              <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted">
-                {chat.scope === "cross" && <Waypoints size={11} />}
-                {timeAgo(chat.updatedAt)}
-              </p>
-            </div>
-            <button
-              aria-label={`Delete chat ${chat.title}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmChat(chat);
-              }}
-              className="mt-0.5 shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-opacity hover:bg-canvas hover:text-red-600 group-hover:opacity-100"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
+            chat={chat}
+            active={chat.id === ws.chatId}
+            checked={selected.has(chat.id)}
+            selectionMode={selected.size > 0}
+            onOpen={() => open(chat)}
+            onToggle={() => toggleSelect(chat.id)}
+            onDelete={() => setConfirmChat(chat)}
+          />
         ))}
       </div>
 

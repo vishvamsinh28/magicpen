@@ -1,8 +1,6 @@
 "use client";
 
-// Who else is in the document right now. Peers come from the sync endpoint,
-// which expires anyone who hasn't polled recently.
-
+/** First letters of up to two name words, uppercased, for avatar badges. */
 const initials = (name) => {
   const parts = String(name || "?").trim().split(/\s+/);
   return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
@@ -10,6 +8,12 @@ const initials = (name) => {
 
 const ROLE_LABEL = { owner: "owner", edit: "can edit", comment: "can comment", view: "viewing" };
 
+/**
+ * Overlapping avatar row of who else is in the document right now (self is
+ * excluded; nothing renders when the viewer is alone). Peers come from the
+ * sync endpoint, which expires anyone who hasn't polled recently, and at most
+ * `max` avatars show before collapsing into a "+n" chip.
+ */
 export default function PresenceBar({ peers = [], selfId = null, max = 4 }) {
   const others = peers.filter((p) => p.id !== selfId);
   if (!others.length) return null;

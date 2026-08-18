@@ -1,78 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Check, EllipsisVertical, FileText, Loader2, FolderOpen, Pencil, Trash2, Download } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PromptDialog from "@/components/ui/PromptDialog";
-import Dropdown from "@/components/ui/Dropdown";
-import { apiFetch, timeAgo } from "@/lib/client-utils";
+import DocCard from "./FilesDocCard";
+import SelectionBar from "./FilesSelectionBar";
+import { apiFetch } from "@/lib/client-utils";
 
-function DocCard({ doc, selected, selectMode, onToggleSelect, onOpen, onRename, onDelete }) {
-  return (
-    <div
-      className={`group relative flex flex-col overflow-hidden rounded-[4px] border bg-paper text-left shadow-card transition-shadow hover:shadow-pop ${
-        selected ? "border-accent ring-2 ring-accent/35" : "border-line"
-      }`}
-    >
-      <button
-        aria-label={selected ? `Deselect ${doc.title}` : `Select ${doc.title}`}
-        aria-pressed={selected}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleSelect();
-        }}
-        className={`absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border-[1.5px] shadow-card transition-opacity ${
-          selected
-            ? "border-accent bg-accent text-white"
-            : `border-line-strong bg-paper text-transparent hover:text-muted ${
-                selectMode ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-              }`
-        }`}
-      >
-        <Check size={14} strokeWidth={3} />
-      </button>
-      <button onClick={onOpen} className="relative flex h-44 flex-col items-stretch justify-start overflow-hidden border-b border-line bg-paper p-3 text-left">
-        {doc.previewHtml ? (
-          <div className="doc-preview" dangerouslySetInnerHTML={{ __html: doc.previewHtml }} />
-        ) : (
-          <div className="flex h-full items-center justify-center text-muted">
-            <FileText size={28} strokeWidth={1.4} />
-          </div>
-        )}
-        <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-paper to-transparent" />
-      </button>
-      <div className="flex items-start justify-between gap-2 px-3.5 py-3">
-        <button onClick={onOpen} className="min-w-0 text-left">
-          <p className="truncate text-[15px] font-semibold text-ink">{doc.title}</p>
-          <p className="mt-0.5 text-[12px] text-muted">{timeAgo(doc.updatedAt)}</p>
-        </button>
-        <Dropdown
-          align="right"
-          items={[
-            { label: "Open", icon: <FolderOpen size={14} />, onSelect: onOpen },
-            { label: "Rename", icon: <Pencil size={14} />, onSelect: onRename },
-            "divider",
-            { label: "Delete", icon: <Trash2 size={14} />, danger: true, onSelect: onDelete },
-          ]}
-          trigger={
-            <button
-              aria-label="Document options"
-              className="shrink-0 rounded-md p-1 text-muted opacity-0 transition-opacity hover:bg-canvas hover:text-ink focus:opacity-100 group-hover:opacity-100"
-            >
-              <EllipsisVertical size={16} />
-            </button>
-          }
-        />
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Full-screen "Your files" modal: a blank-document starter plus every saved
+ * document as a card grid with open / rename / delete and multi-select batch
+ * delete. The list is refetched on each open; cards are only removed or
+ * retitled locally after the workspace context confirms the server accepted.
+ */
 export default function FilesModal() {
   const ws = useWorkspace();
-  const [docs, setDocs] = useState(null);
+  const [docs, setDocs] = useState(null); // null = loading, [] = loaded empty
   const [confirmDoc, setConfirmDoc] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [renameTarget, setRenameTarget] = useState(null);
@@ -81,13 +27,15 @@ export default function FilesModal() {
   const [confirmBatch, setConfirmBatch] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
 
+  // Refetch on every open (and reset selection) so the grid reflects docs
+  // created, renamed or deleted elsewhere since the last look.
   useEffect(() => {
     if (!ws.filesOpen) return;
     setDocs(null);
     setSelected(new Set());
     setConfirmBatch(false);
     apiFetch("/api/documents")
-      .then((data) => setDocs(data.documents))
+      .then((data) => setDocs(data?.documents ?? []))
       .catch((e) => {
         ws.showToast(e.message);
         setDocs([]);
@@ -95,6 +43,8 @@ export default function FilesModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws.filesOpen]);
 
+  // renameDocument / deleteDocument never reject — they toast failures and
+  // resolve to a success boolean — so the awaits below need no try/catch.
   const rename = async (title) => {
     const doc = renameTarget;
     const next = title.trim();
@@ -170,29 +120,12 @@ export default function FilesModal() {
         </div>
 
         {selected.size > 0 ? (
-          <div className="sticky top-3 z-20 mt-10 flex items-center gap-1.5 rounded-lg border border-line bg-paper px-3 py-2 shadow-card">
-            <span className="text-[13px] font-semibold text-ink">{selected.size} selected</span>
-            <button
-              onClick={() => setSelected(new Set((docs || []).map((d) => d.id)))}
-              className="rounded-md px-2 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
-            >
-              Select all
-            </button>
-            <div className="flex-1" />
-            <button
-              onClick={() => setSelected(new Set())}
-              className="rounded-lg border border-line-strong bg-paper px-3 py-1.5 text-[13px] font-semibold text-ink transition-colors hover:bg-canvas"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => setConfirmBatch(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[13px] font-semibold text-white shadow-card transition-colors hover:bg-red-700"
-            >
-              <Trash2 size={13} />
-              Delete
-            </button>
-          </div>
+          <SelectionBar
+            count={selected.size}
+            onSelectAll={() => setSelected(new Set((docs || []).map((d) => d.id)))}
+            onClear={() => setSelected(new Set())}
+            onDelete={() => setConfirmBatch(true)}
+          />
         ) : (
           <p className="mt-10 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-muted">
             Recent documents

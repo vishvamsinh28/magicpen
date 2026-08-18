@@ -1,6 +1,18 @@
-// Starter documents offered in the Templates modal. Pure data — no runtime
-// dependencies, safe to import from client components.
+/**
+ * Starter documents offered in the Templates modal. Pure data — no runtime
+ * dependencies, safe to import from client components. The `html` strings use
+ * only tags/styles that survive cleanDocHtml, and [bracketed] text marks the
+ * placeholders users are meant to replace.
+ *
+ * @typedef {Object} Template
+ * @property {string} id          Stable identifier (also the React list key).
+ * @property {string} name        Display name in the modal.
+ * @property {string} description One-line pitch shown under the name.
+ * @property {string} icon        Icon name understood by the modal's icon map.
+ * @property {string} html        Full starter document as editor HTML.
+ */
 
+/** @type {Template[]} All available starter templates, in display order. */
 export const TEMPLATES = [
   {
     id: "meeting-notes",
@@ -59,7 +71,3 @@ export const TEMPLATES = [
     html: `<h1>[Full Name]</h1><p>[Target Job Title] · [Location] · [Email Address] · [Phone Number] · [linkedin.com/in/username]</p><h2>Profile</h2><p>[Three lines at most: the role you excel at, the proof — years, domains, a headline win — and the value you bring to your next team.]</p><h2>Core Skills</h2><ul><li><strong>[Category, e.g. Languages]:</strong> [Skill], [Skill], [Skill]</li><li><strong>[Category, e.g. Frameworks &amp; Tools]:</strong> [Skill], [Skill], [Skill]</li><li><strong>[Category, e.g. Practices]:</strong> [Skill], [Skill]</li></ul><h2>Work History</h2><h3>[Role] · [Company]</h3><p><em>[Month Year] – [Present] · [City / Remote]</em></p><ul><li>[Led, built, or shipped X, resulting in Y — quantify the outcome wherever possible.]</li><li>[A second accomplishment framed as action then result, not a list of duties.]</li><li>[A third bullet showing scope: team size, budget, users, or scale.]</li></ul><h3>[Previous Role] · [Company]</h3><p><em>[Month Year] – [Month Year] · [City]</em></p><ul><li>[Accomplishment with a concrete number attached.]</li><li>[Accomplishment that shows growth toward your target role.]</li></ul><h2>Selected Projects</h2><ul><li><strong>[Project name]</strong> — [one line on what it does and the tech or approach behind it].</li><li><strong>[Project name]</strong> — [why it is relevant to the role you want].</li></ul><h2>Education &amp; Certifications</h2><ul><li><strong>[Degree]</strong>, [Institution] — [Year]</li><li><strong>[Certification]</strong>, [Issuing body] — [Year]</li></ul>`,
   },
 ];
-
-export function getTemplate(id) {
-  return TEMPLATES.find((t) => t.id === id) || null;
-}

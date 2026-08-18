@@ -3,6 +3,8 @@ import { getUserFromRequest, unauthorized } from "@/lib/auth";
 import { resolveAccess, forbidden } from "@/lib/access";
 import { exportDoc } from "@/lib/export";
 
+// Wraps a generated file as a download; the filename* form keeps non-ASCII
+// titles intact where plain filename= would mangle them.
 function fileResponse(body, { filename, type }) {
   return new Response(body, {
     headers: {
@@ -12,30 +14,35 @@ function fileResponse(body, { filename, type }) {
   });
 }
 
+/**
+ * POST /api/export — convert the posted HTML into a downloadable file.
+ * With a documentId the caller may be a share visitor, so the download is
+ * gated by the link's "allow download" setting instead of by an account.
+ */
 export async function POST(request) {
   const body = await request.json().catch(() => ({}));
-  const { title = "document", format = "docx", documentId = null } = body;
-
-  // Share visitors export through the same route, so downloads are gated by
-  // the link's own "allow download" setting rather than by having an account.
-  if (documentId) {
-    const access = await resolveAccess(request, documentId);
-    if (!access) return unauthorized();
-    if (!access.allowDownload) return forbidden("Downloads are turned off for this link");
-  } else if (!(await getUserFromRequest(request))) {
-    return unauthorized();
-  }
-
-  const html = cleanDocHtml(body.html || "");
-  if (!html) {
-    return Response.json({ error: { message: "Nothing to export — the document is empty" } }, { status: 400 });
-  }
+  const { title = "document", format = "docx", documentId = null } = body ?? {};
 
   try {
+    // Share visitors export through the same route, so downloads are gated by
+    // the link's own "allow download" setting rather than by having an account.
+    if (documentId) {
+      const access = await resolveAccess(request, documentId);
+      if (!access) return unauthorized();
+      if (!access.allowDownload) return forbidden("Downloads are turned off for this link");
+    } else if (!(await getUserFromRequest(request))) {
+      return unauthorized();
+    }
+
+    const html = cleanDocHtml(body?.html || "");
+    if (!html) {
+      return Response.json({ error: { message: "Nothing to export — the document is empty" } }, { status: 400 });
+    }
+
     const { body: out, filename, mimetype } = await exportDoc({ html, title, format });
     return fileResponse(out, { filename, type: mimetype });
   } catch (err) {
-    if (err.code === "bad_format") {
+    if (err?.code === "bad_format") {
       return Response.json({ error: { message: err.message } }, { status: 400 });
     }
     console.error("[magicpen] export failed:", err);

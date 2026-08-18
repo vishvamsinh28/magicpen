@@ -4,8 +4,11 @@ import { X } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import CommentsSidebar from "@/components/collab/CommentsSidebar";
 
-// Owner-side comments, sharing the same sidebar the share page uses so both
-// sides of a conversation look and behave identically.
+/**
+ * Owner-side comments panel, sharing the same sidebar the share page uses so
+ * both sides of a conversation look and behave identically. Keyed by document
+ * id so switching documents remounts the sidebar with fresh thread state.
+ */
 export default function CommentsPanel() {
   const ws = useWorkspace();
   const { activeDocId, editorInstance, user } = ws;

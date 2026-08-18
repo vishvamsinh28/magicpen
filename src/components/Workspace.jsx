@@ -92,6 +92,7 @@ function SidePanel() {
 }
 
 // One dialog serves every "Commit version" entry point (menu, panel).
+// commitVersion never throws (it toasts and returns false), so no try/catch.
 function CommitDialog() {
   const ws = useWorkspace();
   const [busy, setBusy] = useState(false);
@@ -165,6 +166,11 @@ function Shell() {
   );
 }
 
+/**
+ * The signed-in MagicPen app: mounts the single WorkspaceProvider and lays
+ * out the shell (header, toolbar row, editor, side panel, rail, modals).
+ * `user` must already be resolved (AppGate) — nothing here handles auth.
+ */
 export default function Workspace({ user }) {
   return (
     <WorkspaceProvider user={user}>

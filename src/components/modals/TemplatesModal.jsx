@@ -7,6 +7,8 @@ import { useWorkspace } from "@/components/workspace-context";
 import Modal from "@/components/ui/Modal";
 import { TEMPLATES } from "@/lib/templates";
 
+// Maps each template's `icon` key (from lib/templates) to its lucide glyph;
+// unknown keys fall back to FileText at render time.
 const ICONS = {
   notebook: NotebookPen,
   activity: Activity,
@@ -18,6 +20,11 @@ const ICONS = {
   user: UserRound,
 };
 
+/**
+ * Full-screen template gallery: one card per entry in lib/templates. Picking
+ * a card hands the whole template object to the workspace context, which
+ * creates a pre-filled document from it (and handles its own errors).
+ */
 export default function TemplatesModal() {
   const ws = useWorkspace();
 

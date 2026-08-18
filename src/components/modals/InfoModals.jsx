@@ -5,6 +5,7 @@ import { useWorkspace } from "@/components/workspace-context";
 import Modal from "@/components/ui/Modal";
 import { LogoMark } from "@/components/Logo";
 
+// Titled block used by both bodies to keep their vertical rhythm consistent.
 function Section({ title, children }) {
   return (
     <div className="mt-4">
@@ -14,6 +15,7 @@ function Section({ title, children }) {
   );
 }
 
+// Single-choice pill row — the settings modal's radio-group replacement.
 function ChipGroup({ options, value, onChange }) {
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -113,11 +115,18 @@ function ProfileBody() {
   );
 }
 
+// Deliberately only these two bodies — the old Help entries were removed.
+// A `ws.infoModal` value with no body here simply renders no modal.
 const BODIES = {
   settings: SettingsBody,
   profile: ProfileBody,
 };
 
+/**
+ * Small info modals opened from the account menu, one at a time, keyed by
+ * `ws.infoModal` ("settings" | "profile"). Settings writes straight to the
+ * shared workspace settings; profile shows the signed-in account + sign out.
+ */
 export default function InfoModals() {
   const ws = useWorkspace();
   const Body = ws.infoModal ? BODIES[ws.infoModal] : null;

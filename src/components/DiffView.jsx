@@ -2,9 +2,14 @@
 
 import { Check, Pencil, Paintbrush, FilePlus2, FileMinus2, FileText } from "lucide-react";
 
-// Renders the diff items produced by buildDiffItems (src/lib/diff.js). Used by
-// the review card in chat (selectable) and the Changes panel (read-only).
+/**
+ * Renders the diff items produced by buildDiffItems (src/lib/diff.js). Used by
+ * the review card in chat (selectable) and the Changes panel (read-only).
+ * Selection state lives with the caller: `deselected` is a Set of indices.
+ */
 
+// One shared icon element per diff kind (React can render the same element
+// in many places).
 const KIND_ICONS = {
   text: <Pencil size={11} />,
   formatting: <Paintbrush size={11} />,
@@ -14,7 +19,8 @@ const KIND_ICONS = {
   new: <FileText size={11} />,
 };
 
-export function DiffText({ parts }) {
+// Word-level del/ins rendering for text and rewrite diffs.
+function DiffText({ parts = [] }) {
   return (
     <p className="text-[12.5px] leading-relaxed text-ink">
       {parts.map((part, i) => {
@@ -80,7 +86,8 @@ function DiffBody({ item }) {
   }
 }
 
-export function DiffItem({ item, selectable = false, checked = true, onToggle }) {
+// One diff row: kind icon, label, optional include/skip checkbox, body.
+function DiffItem({ item, selectable = false, checked = true, onToggle }) {
   return (
     <div
       className={`rounded-lg border p-2 transition-opacity ${
@@ -113,7 +120,12 @@ export function DiffItem({ item, selectable = false, checked = true, onToggle })
   );
 }
 
-export default function DiffList({ items, selectable = false, deselected, onToggle }) {
+/**
+ * The list of diff rows for one AI change. With `selectable`, each row gets a
+ * checkbox and `onToggle(i)` fires per row; `deselected` (a Set of indices)
+ * marks rows the user excluded.
+ */
+export default function DiffList({ items = [], selectable = false, deselected, onToggle }) {
   return (
     <div className="space-y-1.5">
       {items.map((item, i) => (

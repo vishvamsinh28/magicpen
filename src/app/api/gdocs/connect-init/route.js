@@ -11,6 +11,11 @@ export const dynamic = "force-dynamic";
 
 const json = (body, status = 200) => Response.json(body, { status });
 
+/**
+ * POST /api/gdocs/connect-init — mint a signed account-linking URL.
+ * Uses the add-on's `{ ok, code }` wire shape; the connect URL embeds a
+ * short-lived state token, so links must be requested fresh each time.
+ */
 export async function POST(request) {
   const addonSecret = request.headers.get("x-magicpen-addon");
   if (!verifyAddonSecret(addonSecret)) {
@@ -24,9 +29,14 @@ export async function POST(request) {
     body = {};
   }
 
-  const googleUserId = String(body.googleUserId || "").trim().toLowerCase();
+  const googleUserId = String(body?.googleUserId || "").trim().toLowerCase();
   if (!googleUserId) return json({ ok: false, code: "missing_user" }, 400);
 
-  const connectUrl = await connectUrlForGoogleUser(googleUserId);
-  return json({ ok: true, connectUrl });
+  try {
+    const connectUrl = await connectUrlForGoogleUser(googleUserId);
+    return json({ ok: true, connectUrl });
+  } catch (err) {
+    console.error("[magicpen/gdocs] connect-init failed:", err);
+    return json({ ok: false, code: "server_error" }, 500);
+  }
 }

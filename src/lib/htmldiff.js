@@ -1,10 +1,12 @@
 "use client";
 
-// Structure-preserving HTML diff for the in-document review preview.
-// Tokenizes markup into tags / words / whitespace, aligns the two token
-// streams (LCS), and wraps changed words in <ins>/<del> while tags pass
-// through — so a reworded table cell still renders inside its cell, and a
-// restyled block keeps the proposed styling without duplicating structure.
+/**
+ * Structure-preserving HTML diff for the in-document review preview.
+ * Tokenizes markup into tags / words / whitespace, aligns the two token
+ * streams (LCS), and wraps changed words in <ins>/<del> while tags pass
+ * through — so a reworded table cell still renders inside its cell, and a
+ * restyled block keeps the proposed styling without duplicating structure.
+ */
 
 const TOKEN_RE = /<[^>]+>|[^<\s]+|\s+/g;
 
@@ -50,6 +52,11 @@ function wrapRun(tokens, tag) {
 // Past this table size the LCS isn't worth it — render as full old/new swap.
 const MAX_LCS_CELLS = 400_000;
 
+/**
+ * Diff two HTML strings into one HTML string with changed words wrapped in
+ * <ins>/<del>. Where the two sides "match" loosely, the NEW token is emitted,
+ * so attribute/style changes take effect without being marked as edits.
+ */
 export function diffHtml(oldHtml, newHtml) {
   const a = (oldHtml || "").match(TOKEN_RE) || [];
   const b = (newHtml || "").match(TOKEN_RE) || [];

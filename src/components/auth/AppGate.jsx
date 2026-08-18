@@ -6,14 +6,20 @@ import { LogoMark } from "@/components/Logo";
 import { apiFetch } from "@/lib/client-utils";
 import Workspace from "@/components/Workspace";
 
-// Gates /app behind a valid session and hands the signed-in user to the
-// workspace so it never has to re-fetch it.
+/**
+ * Gates /app behind a valid session and hands the signed-in user to the
+ * workspace so it never has to re-fetch it. Any failure to resolve a user —
+ * expired session, network error, malformed response — redirects to /login.
+ */
 export default function AppGate() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
     apiFetch("/api/auth/me")
-      .then((data) => setUser(data.user))
+      .then((data) => {
+        if (!data?.user) throw new Error("No active session");
+        setUser(data.user);
+      })
       .catch(() => window.location.replace("/login"));
   }, []);
 

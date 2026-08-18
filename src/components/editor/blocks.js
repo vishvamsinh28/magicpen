@@ -3,13 +3,22 @@
 // The document is treated as a list of top-level HTML blocks. The AI receives
 // these numbered blocks and returns index-based operations; applying them is a
 // pure HTML→HTML transform so untouched blocks are preserved byte-for-byte.
+// (src/lib/blocks-server.js mirrors this logic for server-side use.)
 
+/**
+ * Splits an HTML string into its top-level element blocks (outerHTML each).
+ * Browser-only: relies on the DOM parser for fidelity with what TipTap loads.
+ */
 export function htmlToBlocks(html) {
   const container = document.createElement("div");
   container.innerHTML = html || "";
   return Array.from(container.children).map((el) => el.outerHTML);
 }
 
+/**
+ * True when the HTML renders as nothing meaningful — no text content and none
+ * of the visible empty-able elements (images, tables, rules).
+ */
 export function isHtmlEmpty(html) {
   if (!html) return true;
   const container = document.createElement("div");
@@ -17,6 +26,12 @@ export function isHtmlEmpty(html) {
   return !container.textContent.trim() && !container.querySelector("img, table, hr");
 }
 
+/**
+ * Applies AI block operations (replace / delete / insertAfter / insertBefore /
+ * setDocument) to an HTML document string. Indexes are clamped into range and
+ * malformed ops are skipped, so a bad model response can't corrupt the doc;
+ * inserts aimed at an empty document land in a synthetic tail slot.
+ */
 export function applyOpsToHtml(html, ops = []) {
   const setDoc = ops.find((op) => op.op === "setDocument");
   if (setDoc) return setDoc.html || "";
@@ -64,15 +79,22 @@ export function applyOpsToHtml(html, ops = []) {
     .join("");
 }
 
+/**
+ * Human-readable {icon, label} summaries of block operations, for the chat's
+ * pending-change card. Indexes are read the same way applyOpsToHtml reads
+ * them (Number(...) || 0), so labels match what would actually be applied.
+ */
 export function describeOps(ops = []) {
+  if (!Array.isArray(ops)) return [];
   return ops.map((op) => {
-    switch (op.op) {
-      case "replace": return { icon: "edit", label: `Edited block ${op.index + 1}` };
+    const blockNo = (Number(op?.index) || 0) + 1;
+    switch (op?.op) {
+      case "replace": return { icon: "edit", label: `Edited block ${blockNo}` };
       case "insertAfter":
       case "insertBefore": return { icon: "plus", label: "Added content" };
-      case "delete": return { icon: "minus", label: `Removed block ${op.index + 1}` };
+      case "delete": return { icon: "minus", label: `Removed block ${blockNo}` };
       case "setDocument": return { icon: "file", label: "Wrote document" };
-      default: return { icon: "edit", label: op.op };
+      default: return { icon: "edit", label: op?.op ?? "edit" };
     }
   });
 }

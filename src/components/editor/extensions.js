@@ -115,10 +115,14 @@ const TailSpan = Mark.create({
   },
 });
 
-// `ydoc` is only passed for documents that are actually being collaborated on.
-// Without it the editor behaves exactly as it always has; with it, the document
-// state lives in the CRDT and Yjs supplies undo/redo (its history is per-user,
-// so undo never rolls back someone else's typing).
+/**
+ * The full TipTap extension set for MagicPen documents — StarterKit plus the
+ * app's custom marks/nodes, search and comment decorations, and placeholder.
+ * `ydoc` is only passed for documents that are actually being collaborated on.
+ * Without it the editor behaves exactly as it always has; with it, the document
+ * state lives in the CRDT and Yjs supplies undo/redo (its history is per-user,
+ * so undo never rolls back someone else's typing).
+ */
 export function createExtensions({ ydoc = null } = {}) {
   return [
     StarterKit.configure({

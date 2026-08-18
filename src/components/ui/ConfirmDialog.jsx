@@ -4,10 +4,14 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 
-// In-app replacement for window.confirm. Browsers silently suppress repeated
-// native dialogs ("prevent this page from creating additional dialogs"),
-// which turned confirm-gated actions into no-ops. Sits above every other
-// surface (drawers z-60, modals z-70, dropdowns z-90).
+/**
+ * In-app replacement for window.confirm. Browsers silently suppress repeated
+ * native dialogs ("prevent this page from creating additional dialogs"),
+ * which turned confirm-gated actions into no-ops. Sits above every other
+ * surface (drawers z-60, modals z-70, dropdowns z-90). While `busy`, both
+ * buttons and the backdrop are inert so a pending action can't be re-fired
+ * or abandoned; `danger` (default true) styles the confirm button red.
+ */
 export default function ConfirmDialog({
   open,
   title,

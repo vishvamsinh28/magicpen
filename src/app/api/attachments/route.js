@@ -3,6 +3,11 @@ import { getUserFromRequest, unauthorized } from "@/lib/auth";
 
 // Parses a chat attachment to plain text used as AI context. Nothing is stored.
 
+/**
+ * POST /api/attachments — parse an uploaded file into plain text for the chat.
+ * The file is read once, converted, and discarded; only the extracted text is
+ * returned. Rejects missing files (400), oversized files (413), unreadable ones (415).
+ */
 export async function POST(request) {
   const user = await getUserFromRequest(request);
   if (!user) return unauthorized();
@@ -20,11 +25,11 @@ export async function POST(request) {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = await parseFileToHtml({ buffer, filename: file.name });
-    return Response.json({ attachment: { name: file.name, text: parsed.text } });
+    return Response.json({ attachment: { name: file.name, text: parsed?.text } });
   } catch (err) {
     console.error("[magicpen] attachment parse failed:", err);
     const message =
-      err.code === "unsupported_type" ? err.message : `Couldn't read "${file.name}".`;
+      err?.code === "unsupported_type" ? err.message : `Couldn't read "${file.name}".`;
     return Response.json({ error: { message } }, { status: 415 });
   }
 }

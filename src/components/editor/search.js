@@ -5,13 +5,17 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 // Find & replace support: match finding over the ProseMirror doc plus a
-// decoration plugin that highlights matches. The React panel in EditorPane
+// decoration plugin that highlights matches. The React panel (FindReplacePanel)
 // owns the state and pushes {matches, activeIndex} in via setMeta.
 
+/** Key for the search-highlight plugin; setMeta with it to set the matches. */
 export const searchPluginKey = new PluginKey("sdSearch");
 
-// All occurrences of `query` as [{from, to}] doc ranges. Matches can span
-// styled runs within a block ("bo" + "ld" finds "bold") but not blocks.
+/**
+ * All occurrences of `query` as [{from, to}] doc ranges. Matches can span
+ * styled runs within a block ("bo" + "ld" finds "bold") but never cross block
+ * boundaries. Case-insensitive unless `caseSensitive` is set.
+ */
 export function findMatches(doc, query, caseSensitive = false) {
   if (!query) return [];
   const needle = caseSensitive ? query : query.toLowerCase();
@@ -54,6 +58,11 @@ export function findMatches(doc, query, caseSensitive = false) {
   return results;
 }
 
+/**
+ * Decorates search matches with mp-search-hit (the active one additionally
+ * with mp-search-hit-active). Between meta pushes, existing decorations are
+ * mapped through document changes so they track edits.
+ */
 export const SearchHighlight = Extension.create({
   name: "sdSearch",
 

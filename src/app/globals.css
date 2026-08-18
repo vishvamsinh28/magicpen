@@ -615,20 +615,6 @@ body {
   }
 }
 
-@keyframes mp-slide-in-left {
-  from {
-    transform: translateX(-16px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-.mp-slide-in-left {
-  animation: mp-slide-in-left 0.18s ease-out both;
-}
-
 @keyframes mp-slide-in-right {
   from {
     transform: translateX(16px);

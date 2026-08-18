@@ -3,6 +3,14 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 
+/**
+ * Base modal shell (z-70) in three variants: "center" — dismissible card with
+ * a backdrop and its own close button; "full" — full-screen page with a
+ * floating close button and no backdrop; "drawer" — right-edge panel whose
+ * backdrop click closes it (no button). All variants close on Escape; the
+ * component renders nothing while `open` is false, so bodies mount fresh.
+ * ConfirmDialog/PromptDialog (z-100) stack above and swallow their own Escape.
+ */
 export default function Modal({ open, onClose, variant = "center", children, labelledBy }) {
   useEffect(() => {
     if (!open) return;

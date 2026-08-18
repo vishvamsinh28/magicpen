@@ -23,7 +23,8 @@ MongoDB. Auth is first-party (scrypt password hashing + JWT sessions); Supabase 
 - 📄 **Import**: PDF, DOCX, TXT, RTF, Markdown, HTML (≤ 30 MB)
 - 📥 **Export**: Word (.docx), Markdown, HTML, plain text, or print-to-PDF
 - 📎 **Reference attachments** in chat for extra context
-- 📝 **Templates**: NDA, rent agreement, cover letter, meeting notes, proposal, invoice, resume
+- 📝 **Templates**: meeting notes, project status update, product one-pager, press release,
+  statement of work, invoice, job offer letter, resume
 - 🛡️ **Review Mode**: approve or dismiss proposed changes before they land
 - 🔄 **Changes history** per document with one-click restore
 - 🗑️ **Bulk actions** — multi-select documents or chats and delete them in one pass
@@ -55,7 +56,7 @@ Both are optional and stay disabled until their environment variables are set.
 | --- | --- |
 | `/` | Landing page |
 | `/login` · `/register` | Email/password auth |
-| `/app` | The workspace — chat on the left, editor on the right |
+| `/app` | The workspace — document tabs up top, the page in the middle, and a right-side rail for documents, AI chat, chat history, comments, versions and changes |
 
 ## Setup
 

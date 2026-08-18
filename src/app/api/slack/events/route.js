@@ -28,14 +28,67 @@ function isActionableMessage(event) {
   return false;
 }
 
+// The deferred half of the webhook: claim the event id, then run the AI-backed
+// handler. Runs in after(), so failures can only log + release the claim —
+// the 200 ack has already gone out.
+async function processEvent({ event, teamId, eventId }) {
+  try {
+    // Idempotency: Slack re-delivers on timeout/retry and the bot mutates docs,
+    // so handle each event once. A failed handler releases the claim so a
+    // genuine retry can re-process.
+    if (eventId && !(await SlackEvents.claim(eventId))) {
+      await SlackDebug.log({ kind: "handle", stage: "duplicate_skipped", teamId }).catch(() => {});
+      return;
+    }
+    const botToken = await botTokenForTeam(teamId);
+    await SlackDebug.log({ kind: "handle", stage: "start", teamId, hasToken: !!botToken, eventType: event.type }).catch(() => {});
+    if (!botToken) return;
+    await handleMessage({
+      teamId,
+      channel: event.channel,
+      slackUserId: event.user,
+      text: event.text || "",
+      threadTs: event.thread_ts || event.ts,
+      files: event.files || [],
+      botToken,
+    });
+    await SlackDebug.log({ kind: "handle", stage: "done", teamId }).catch(() => {});
+  } catch (err) {
+    if (eventId) await SlackEvents.release(eventId).catch(() => {});
+    await SlackDebug.log({
+      kind: "handle", stage: "error", teamId,
+      error: String(err?.message || err), code: err?.code || null,
+      slackError: err?.data?.error || null,
+    }).catch(() => {});
+    console.error("[magicpen/slack] event handler failed:", err);
+  }
+}
+
+/**
+ * POST /api/slack/events — verified Slack Events API intake.
+ * Acks inside Slack's 3s window and defers all real work to after(); only a
+ * failure to read the raw body (needed for signing) returns a 500.
+ */
 export async function POST(request) {
-  const body = await request.text();
+  let body;
+  try {
+    body = await request.text();
+  } catch (err) {
+    console.error("[magicpen/slack] event body read failed:", err);
+    return new Response("internal error", { status: 500 });
+  }
   const sigHeader = request.headers.get("x-slack-signature");
   const tsHeader = request.headers.get("x-slack-request-timestamp");
   const verified = verifySlackSignature({ signature: sigHeader, timestamp: tsHeader, body });
 
   let payload = null;
-  try { payload = JSON.parse(body); } catch {}
+  try {
+    payload = JSON.parse(body);
+  } catch (err) {
+    // Non-JSON bodies are expected (Slack retries, probes) — log and continue
+    // with payload=null so the debug record below still captures the request.
+    console.warn("[magicpen/slack] event body was not JSON:", err?.message);
+  }
 
   // Observability: record that a request arrived and how it looked.
   await SlackDebug.log({
@@ -65,40 +118,7 @@ export async function POST(request) {
 
   const event = payload.event;
   const teamId = payload.team_id || event.team;
-  const eventId = payload.event_id;
-
-  after(async () => {
-    // Idempotency: Slack re-delivers on timeout/retry and the bot mutates docs,
-    // so handle each event once. A failed handler releases the claim so a
-    // genuine retry can re-process.
-    if (eventId && !(await SlackEvents.claim(eventId))) {
-      await SlackDebug.log({ kind: "handle", stage: "duplicate_skipped", teamId }).catch(() => {});
-      return;
-    }
-    try {
-      const botToken = await botTokenForTeam(teamId);
-      await SlackDebug.log({ kind: "handle", stage: "start", teamId, hasToken: !!botToken, eventType: event.type }).catch(() => {});
-      if (!botToken) return;
-      await handleMessage({
-        teamId,
-        channel: event.channel,
-        slackUserId: event.user,
-        text: event.text || "",
-        threadTs: event.thread_ts || event.ts,
-        files: event.files || [],
-        botToken,
-      });
-      await SlackDebug.log({ kind: "handle", stage: "done", teamId }).catch(() => {});
-    } catch (err) {
-      if (eventId) await SlackEvents.release(eventId).catch(() => {});
-      await SlackDebug.log({
-        kind: "handle", stage: "error", teamId,
-        error: String(err?.message || err), code: err?.code || null,
-        slackError: err?.data?.error || null,
-      }).catch(() => {});
-      console.error("[magicpen/slack] event handler failed:", err);
-    }
-  });
+  after(() => processEvent({ event, teamId, eventId: payload.event_id }));
 
   return ok();
 }

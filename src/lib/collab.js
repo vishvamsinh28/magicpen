@@ -2,16 +2,24 @@
 
 import * as Y from "yjs";
 
-// Client half of the collaboration channel. Yjs updates commute, so the
-// transport can be dumb: batch whatever changed locally, POST it alongside the
-// last sequence number we saw, and apply whatever comes back. No WebSocket, no
-// server-side merge, and a dropped or duplicated round trip is harmless.
+/**
+ * Client half of the collaboration channel. Yjs updates commute, so the
+ * transport can be dumb: batch whatever changed locally, POST it alongside the
+ * last sequence number we saw, and apply whatever comes back. No WebSocket, no
+ * server-side merge, and a dropped or duplicated round trip is harmless.
+ */
 
 const POLL_ACTIVE_MS = 1200;
 const POLL_IDLE_MS = 5000;
 // After a local edit, sync sooner so the other side sees typing quickly.
 const POLL_EAGER_MS = 350;
 
+/**
+ * Create the polling sync provider for one document's Y.Doc. Returns
+ * { start, claimSeed, stop, flush }; callers must stop() on unmount or the
+ * poll timer and update listener leak. Remote updates are applied with origin
+ * "remote" so they are never echoed back to the server.
+ */
 export function createCollabProvider({ documentId, ydoc, shareToken = null, onPeers, onStatus }) {
   let since = 0;
   let stopped = false;
@@ -113,6 +121,8 @@ export function createCollabProvider({ documentId, ydoc, shareToken = null, onPe
       onPeers?.(data.peers || []);
       return !!data.seedGranted;
     } catch {
+      // Network/server failure — claim not granted; another client (or a
+      // later retry) will seed instead.
       return false;
     }
   };
@@ -121,13 +131,18 @@ export function createCollabProvider({ documentId, ydoc, shareToken = null, onPe
     stopped = true;
     clearTimeout(timer);
     ydoc.off("update", onLocalUpdate);
-    // Best-effort presence cleanup; the server also expires stale peers.
-    fetch(`/api/documents/${documentId}/sync`, { method: "DELETE", headers }).catch(() => {});
+    // Best-effort presence cleanup; the server also expires stale peers, so a
+    // failure here (tab closing mid-request) only delays the peer disappearing.
+    fetch(`/api/documents/${documentId}/sync`, { method: "DELETE", headers }).catch((err) =>
+      console.debug("[magicpen] presence cleanup skipped:", err?.message)
+    );
   };
 
   return { start, claimSeed, stop, flush: () => schedule(0) };
 }
 
+// Uint8Array → base64, chunked so huge updates don't blow the argument limit
+// of String.fromCharCode.apply.
 const toB64 = (u8) => {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) {
@@ -136,6 +151,7 @@ const toB64 = (u8) => {
   return btoa(s);
 };
 
+// base64 → Uint8Array (inverse of toB64).
 const fromB64 = (str) => {
   const bin = atob(str);
   const out = new Uint8Array(bin.length);

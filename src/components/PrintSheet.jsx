@@ -4,10 +4,13 @@ import { useEffect } from "react";
 import { flushSync } from "react-dom";
 import { useWorkspace } from "./workspace-context";
 
-// Dedicated print layer. On screen it's hidden; when printing, the app shell
-// is hidden instead and this sheet flows naturally across as many pages as the
-// document needs (the in-app editor lives inside fixed-height scroll
-// containers, which browsers clip to a single page when printed directly).
+/**
+ * Dedicated print layer. On screen it's hidden; when printing, the app shell
+ * is hidden instead and this sheet flows naturally across as many pages as the
+ * document needs (the in-app editor lives inside fixed-height scroll
+ * containers, which browsers clip to a single page when printed directly).
+ * Must render inside WorkspaceProvider — it is driven by `printHtml`.
+ */
 export default function PrintSheet() {
   const ws = useWorkspace();
   const { printHtml, setPrintHtml } = ws;

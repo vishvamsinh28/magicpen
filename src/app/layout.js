@@ -25,6 +25,11 @@ export const metadata = {
     "Write and edit documents with AI. Open a document, ask in plain English, and MagicPen makes precise edits right in place — your formatting stays exactly as you left it.",
 };
 
+/**
+ * Root layout for every route: wires the three font CSS variables that
+ * globals.css maps to --font-sans/--font-mono/--font-display, and mounts
+ * Vercel Analytics once for the whole app.
+ */
 export default function RootLayout({ children }) {
   return (
     <html

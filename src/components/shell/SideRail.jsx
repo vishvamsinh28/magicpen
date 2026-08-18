@@ -3,12 +3,8 @@
 import { Sparkles, MessageSquare, MessageSquareText, GitCommit, History, FolderOpen } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 
-// Slim rail on the right edge, like the Docs side panel launcher. Each icon
-// toggles a view in the collapsible side panel between the canvas and the
-// rail; the canvas takes the space back when the panel closes. This is the
-// ONLY launcher for these panels (there is no menu bar), so on mobile it
-// shows beside the panel whenever the assistant pane is active.
-
+// Panels the rail can toggle, in display order. `view` keys must match what
+// workspace-context's togglePanel/panel understand.
 const VIEWS = [
   { view: "docs", label: "Documents", icon: FolderOpen },
   { view: "chat", label: "AI assistant", icon: Sparkles },
@@ -32,6 +28,13 @@ function RailTooltip({ label }) {
   );
 }
 
+/**
+ * Slim rail on the right edge, like the Docs side-panel launcher. Each icon
+ * toggles a view in the collapsible side panel between the canvas and the
+ * rail; the canvas takes the space back when the panel closes. This is the
+ * ONLY launcher for these panels (there is no menu bar), so on mobile it
+ * shows beside the panel whenever the assistant pane is active.
+ */
 export default function SideRail() {
   const ws = useWorkspace();
 

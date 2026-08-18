@@ -13,18 +13,27 @@ import { SignJWT, jwtVerify } from "jose";
 
 /* ------------------------------- config ---------------------------------- */
 
-export const gdocsConfigured = () => !!process.env.GDOCS_ADDON_SECRET;
-
+/**
+ * Base URL of this deployment (APP_BASE_URL) with any trailing slashes
+ * stripped, so callers can safely append `/path` segments.
+ */
 export const appBaseUrl = () => (process.env.APP_BASE_URL || "").replace(/\/+$/, "");
+
+/**
+ * Browser URL for the one-time Google↔MagicPen account-linking flow. `state`
+ * is the signed JWT from signConnectState carrying the Google identity.
+ */
 export const gdocsConnectUrl = (state) =>
   `${appBaseUrl()}/gdocs/connect?state=${encodeURIComponent(state)}`;
 
 /* --------------------------- add-on request auth -------------------------- */
 
-// Every add-on → backend request carries this shared secret in a header. The
-// add-on keeps it in its Apps Script "Script Properties" (server-side, never in
-// the sidebar HTML). Constant-time compare; false when the secret is unset so
-// the endpoints stay closed until configured.
+/**
+ * Verifies the shared secret every add-on → backend request carries in a
+ * header. The add-on keeps it in its Apps Script "Script Properties"
+ * (server-side, never in the sidebar HTML). Constant-time compare; false when
+ * the secret is unset so the endpoints stay closed until configured.
+ */
 export function verifyAddonSecret(header) {
   const secret = process.env.GDOCS_ADDON_SECRET;
   if (!secret || !header) return false;
@@ -41,15 +50,29 @@ export function verifyAddonSecret(header) {
 const stateSecret = () =>
   new TextEncoder().encode(process.env.GDOCS_ADDON_SECRET || "magicpen-gdocs-dev");
 
+/**
+ * Signs a short-lived (15 min) JWT carrying the Google identity through the
+ * browser account-linking round-trip. Verified by verifyConnectState on the
+ * /gdocs/connect callback.
+ */
 export async function signConnectState({ googleUserId }) {
-  return new SignJWT({ googleUserId, kind: "gdocs_connect" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("magicpen")
-    .setIssuedAt()
-    .setExpirationTime("15m")
-    .sign(stateSecret());
+  try {
+    return await new SignJWT({ googleUserId, kind: "gdocs_connect" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer("magicpen")
+      .setIssuedAt()
+      .setExpirationTime("15m")
+      .sign(stateSecret());
+  } catch (err) {
+    throw new Error(`Failed to sign Google Docs connect state: ${err.message}`, { cause: err });
+  }
 }
 
+/**
+ * Verifies a connect-state JWT and returns { googleUserId }, or null for
+ * anything invalid/expired — callers treat null as "show an error page", so
+ * this never throws.
+ */
 export async function verifyConnectState(token) {
   try {
     const { payload } = await jwtVerify(token, stateSecret(), { issuer: "magicpen" });

@@ -17,11 +17,17 @@ const json = (body, status = 200) => Response.json(body, { status });
 // Mirror of slack-actions' aiErrorText: turn an assistant error into a message
 // the sidebar can show verbatim.
 function aiErrorMessage(err) {
-  if (err.code === "ai_not_configured") return "The AI isn't configured on the server yet (missing GEMINI_API_KEY).";
-  if (err.code === "ai_quota") return err.message;
+  if (err?.code === "ai_not_configured") return "The AI isn't configured on the server yet (missing GEMINI_API_KEY).";
+  if (err?.code === "ai_quota") return err.message;
   return "The AI request failed — please try again.";
 }
 
+/**
+ * POST /api/gdocs/assist — run an AI edit for the add-on sidebar.
+ * Responds with the add-on's `{ ok, code, … }` wire shape (never the app's
+ * `{ error }` shape); failures after auth come back ok:false at HTTP 200 so
+ * the sidebar can show the message.
+ */
 export async function POST(request) {
   const addonSecret = request.headers.get("x-magicpen-addon");
   if (!verifyAddonSecret(addonSecret)) {
@@ -37,27 +43,27 @@ export async function POST(request) {
 
   // Emails are case-insensitive; normalize so the link written by the browser
   // flow and the lookup here always agree.
-  const googleUserId = String(body.googleUserId || "").trim().toLowerCase();
-  const message = String(body.message || "").trim();
+  const googleUserId = String(body?.googleUserId || "").trim().toLowerCase();
+  const message = String(body?.message || "").trim();
   if (!googleUserId) return json({ ok: false, code: "missing_user" }, 400);
   if (!message) return json({ ok: false, code: "missing_message" }, 400);
 
-  const user = await resolveUserByGoogleId(googleUserId);
-  if (!user) {
-    const connectUrl = await connectUrlForGoogleUser(googleUserId);
-    return json({ ok: false, code: "not_linked", connectUrl });
-  }
-
   try {
+    const user = await resolveUserByGoogleId(googleUserId);
+    if (!user) {
+      const connectUrl = await connectUrlForGoogleUser(googleUserId);
+      return json({ ok: false, code: "not_linked", connectUrl });
+    }
+
     const result = await assistOnDoc({
-      title: body.title,
-      html: body.html,
+      title: body?.title,
+      html: body?.html,
       message,
-      mode: body.mode,
+      mode: body?.mode,
     });
     return json({ ok: true, ...result });
   } catch (err) {
     console.error("[magicpen/gdocs] assist failed:", err);
-    return json({ ok: false, code: err.code || "ai_error", message: aiErrorMessage(err) });
+    return json({ ok: false, code: err?.code || "ai_error", message: aiErrorMessage(err) });
   }
 }
