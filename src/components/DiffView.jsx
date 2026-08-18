@@ -49,7 +49,7 @@ function HtmlPreview({ html, tone }) {
       ? "border-[#cbe4d5] bg-[#f2faf5]"
       : tone === "remove"
         ? "border-red-100 bg-red-50/60 line-through decoration-red-300 opacity-80"
-        : "border-line bg-cream";
+        : "border-line bg-canvas";
   return (
     <div
       className={`diff-preview rounded-lg border px-2.5 py-1.5 ${toneClass}`}
@@ -84,7 +84,7 @@ export function DiffItem({ item, selectable = false, checked = true, onToggle })
   return (
     <div
       className={`rounded-lg border p-2 transition-opacity ${
-        selectable && !checked ? "border-line bg-cream opacity-50" : "border-line bg-paper"
+        selectable && !checked ? "border-line bg-canvas opacity-50" : "border-line bg-paper"
       }`}
     >
       <div className="flex items-center gap-1.5">
@@ -94,7 +94,7 @@ export function DiffItem({ item, selectable = false, checked = true, onToggle })
             aria-label={checked ? `Skip: ${item.label}` : `Include: ${item.label}`}
             aria-pressed={checked}
             className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] transition-colors ${
-              checked ? "border-accent bg-accent text-white" : "border-frame bg-paper text-transparent hover:text-muted"
+              checked ? "border-accent bg-accent text-white" : "border-line-strong bg-paper text-transparent hover:text-muted"
             }`}
           >
             <Check size={11} strokeWidth={3.5} />

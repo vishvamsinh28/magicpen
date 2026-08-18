@@ -39,7 +39,7 @@ export async function POST(request) {
       mode,
     });
   } catch (err) {
-    console.error("[superdocs] AI request failed:", err);
+    console.error("[magicpen] AI request failed:", err);
     const status =
       err.code === "ai_not_configured" ? 400 : err.code === "ai_quota" ? 429 : 502;
     return Response.json(

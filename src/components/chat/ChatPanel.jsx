@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Plus, ChevronDown, ChevronUp, ArrowUp, Paperclip, Shield, ShieldCheck,
+  Plus, ChevronUp, ArrowUp, Paperclip, Shield, ShieldCheck,
   Loader2, X, Waypoints, Scale, TriangleAlert, Pencil, FilePlus2, FileMinus2,
-  FileText, Check,
+  FileText, Check, Sparkles,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import Dropdown from "@/components/ui/Dropdown";
@@ -37,38 +37,58 @@ function opLabel(op) {
   }
 }
 
+// Empty-conversation state: a short greeting and clickable starter prompts
+// that prefill the composer (via the mp-chat-prefill event Composer listens
+// for), plus two one-line hints about the controls right below them.
 function WelcomeCard() {
+  const starters = [
+    "load the meeting notes template",
+    "draft a press release for our launch",
+    "make the intro half as long",
+    "turn the bullet points into a table",
+  ];
+  const pick = (s) => window.dispatchEvent(new CustomEvent("mp-chat-prefill", { detail: s }));
   return (
-    <div className="rounded-2xl border border-line bg-paper p-4 text-[13px] leading-relaxed shadow-card">
-      <p className="text-[14px] font-bold text-ink">👋 Welcome to SuperDocs</p>
-      <p className="text-[12.5px] text-muted">Your AI document assistant</p>
-
-      <p className="mt-3.5 font-semibold text-ink">Get started</p>
-      <div className="mt-1 space-y-1 text-ink-soft">
-        <p><strong className="text-ink">Upload</strong> — click the Upload button above the editor</p>
-        <p><strong className="text-ink">Paste</strong> — paste your text directly into the editor on the right</p>
-        <p><strong className="text-ink">Template</strong> — <em>&quot;load the NDA template&quot;</em></p>
-        <p><strong className="text-ink">Create</strong> — <em>&quot;create a rent agreement&quot;</em></p>
-      </div>
-
-      <p className="mt-3.5 font-semibold text-ink">What I can do</p>
-      <p className="mt-1 text-ink-soft">
-        Tell me what you want changed — I can edit any part of your document however
-        you&apos;d like. Rewrite sections, fix grammar, translate, restructure, highlight
-        text, change formatting, add or remove content.
+    <div className="px-1 pb-2 pt-8 text-center">
+      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+        <Sparkles size={22} strokeWidth={2} />
+      </span>
+      <p className="font-display mt-3.5 text-[16.5px] font-bold tracking-tight text-ink">
+        What should we write?
+      </p>
+      <p className="mx-auto mt-1.5 max-w-[270px] text-[12.5px] leading-relaxed text-muted">
+        Drop a file on the page, paste text, or describe the document you need — then
+        tell me what to change. I only touch the part you point at.
       </p>
 
-      <p className="mt-3.5 font-semibold text-ink">Tips</p>
-      <div className="mt-1 space-y-1 text-ink-soft">
-        <p><strong className="text-ink">Review Mode</strong> — toggle the shield icon below to approve changes before they&apos;re applied</p>
-        <p><strong className="text-ink">Changes</strong> — track all edits in the Changes tab on the left panel</p>
-        <p><strong className="text-ink">Attach</strong> — click 📎 below to add reference files as context for your edits</p>
+      <div className="mt-5 space-y-1.5">
+        {starters.map((s) => (
+          <button
+            key={s}
+            onClick={() => pick(s)}
+            className="block w-full rounded-lg border border-line bg-paper px-3 py-2 text-left text-[12.5px] text-ink-soft shadow-card transition-colors hover:border-accent-faint hover:bg-accent-soft/40 hover:text-ink"
+          >
+            “{s}”
+          </button>
+        ))}
       </div>
 
-      <p className="mt-3.5 border-t border-line pt-3 text-[12.5px] text-muted">
-        Your document goes in the <strong className="text-ink-soft">editor on the right</strong>.
-        Use this chat for instructions.
-      </p>
+      <div className="mt-6 space-y-2 border-t border-line pt-4 text-left">
+        <p className="flex items-start gap-2 text-[12px] leading-relaxed text-muted">
+          <Shield size={13} className="mt-0.5 shrink-0" />
+          <span>
+            The shield below turns on <strong className="font-semibold text-ink-soft">Review Mode</strong> —
+            every edit waits for your approval.
+          </span>
+        </p>
+        <p className="flex items-start gap-2 text-[12px] leading-relaxed text-muted">
+          <Paperclip size={13} className="mt-0.5 shrink-0" />
+          <span>
+            Attach reference files for context; <strong className="font-semibold text-ink-soft">View → AI changes</strong> lists
+            every edit with undo.
+          </span>
+        </p>
+      </div>
     </div>
   );
 }
@@ -80,7 +100,7 @@ function EditChips({ edits, status, info }) {
       {edits.slice(0, 6).map((op, i) => (
         <span
           key={i}
-          className="inline-flex items-center gap-1 rounded-full border border-line bg-cream px-2 py-0.5 text-[11px] text-ink-soft"
+          className="inline-flex items-center gap-1 rounded-full border border-line bg-canvas px-2 py-0.5 text-[11px] text-ink-soft"
         >
           {OP_ICONS[op.op]}
           {opLabel(op)}
@@ -106,7 +126,7 @@ function EditChips({ edits, status, info }) {
         </span>
       )}
       {status === "rejected" && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[11px] font-medium text-muted">
+        <span className="inline-flex items-center gap-1 rounded-full bg-canvas px-2 py-0.5 text-[11px] font-medium text-muted">
           Dismissed
         </span>
       )}
@@ -165,7 +185,7 @@ function TypingBubble() {
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="sd-dot h-1.5 w-1.5 rounded-full bg-accent"
+            className="mp-dot h-1.5 w-1.5 rounded-full bg-accent"
             style={{ animationDelay: `${i * 0.15}s` }}
           />
         ))}
@@ -198,7 +218,7 @@ function PendingChangeCard() {
   const selectedCount = selectable ? total - deselected.size : total;
 
   return (
-    <div className="sd-pop-in rounded-2xl border-[1.5px] border-accent bg-accent-soft p-3.5">
+    <div className="mp-pop-in rounded-2xl border-[1.5px] border-accent bg-accent-soft p-3.5">
       <p className="flex items-center gap-2 text-[13.5px] font-semibold text-accent-deep">
         <ShieldCheck size={16} /> Review proposed changes
       </p>
@@ -240,7 +260,7 @@ function PendingChangeCard() {
         </button>
         <button
           onClick={ws.rejectPendingChange}
-          className="rounded-lg border border-line bg-paper px-3.5 py-1.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-cream"
+          className="rounded-lg border border-line bg-paper px-3.5 py-1.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-canvas"
         >
           Dismiss
         </button>
@@ -256,6 +276,22 @@ function Composer() {
   const [attachments, setAttachments] = useState([]); // {name, text, loading}
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
+
+  // Starter prompts in the welcome card prefill the composer through this
+  // event so the two components stay decoupled.
+  useEffect(() => {
+    const onPrefill = (e) => {
+      setText(e.detail || "");
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        requestAnimationFrame(() => autoGrow(el));
+      }
+    };
+    window.addEventListener("mp-chat-prefill", onPrefill);
+    return () => window.removeEventListener("mp-chat-prefill", onPrefill);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const canSend = text.trim().length > 0 && !sending && !attachments.some((a) => a.loading);
 
@@ -295,7 +331,7 @@ function Composer() {
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {attachments.map((a, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 rounded-md border border-line bg-cream px-2 py-1 text-[11.5px] text-ink-soft">
+            <span key={i} className="inline-flex items-center gap-1.5 rounded-md border border-line bg-canvas px-2 py-1 text-[11.5px] text-ink-soft">
               {a.loading ? <Loader2 size={11} className="animate-spin" /> : <Paperclip size={11} />}
               <span className="max-w-36 truncate">{a.name}</span>
               <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-muted hover:text-ink">
@@ -307,7 +343,7 @@ function Composer() {
       )}
 
       <div className="flex items-end gap-2">
-        <div className="min-w-0 flex-1 rounded-lg border-[1.5px] border-frame bg-paper px-3 py-2 transition-shadow focus-within:shadow-card">
+        <div className="min-w-0 flex-1 rounded-lg border border-line-strong bg-paper px-3 py-2 transition-colors focus-within:border-accent">
           <textarea
             ref={textareaRef}
             rows={2}
@@ -330,7 +366,7 @@ function Composer() {
           onClick={send}
           disabled={!canSend}
           aria-label="Send message"
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-all ${
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
             canSend
               ? "border-accent-deep bg-accent text-white shadow-card hover:bg-accent-deep"
               : "border-line bg-paper text-muted"
@@ -344,7 +380,7 @@ function Composer() {
         <button
           onClick={() => fileRef.current?.click()}
           title="Attach a reference file"
-          className="rounded-md p-1.5 text-ink-soft transition-colors hover:bg-cream hover:text-ink"
+          className="rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
         >
           <Paperclip size={15} />
         </button>
@@ -358,7 +394,7 @@ function Composer() {
             onSelect: () => setSettings((s) => ({ ...s, mode: key })),
           }))}
           trigger={
-            <button className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-cream">
+            <button className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-canvas">
               <Scale size={13} />
               {MODES[settings.mode]?.label || "Balanced"}
               <ChevronUp size={12} className="text-muted" />
@@ -375,7 +411,7 @@ function Composer() {
           }
           className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12.5px] font-medium transition-colors ${
             settings.autoApply
-              ? "text-ink-soft hover:bg-cream"
+              ? "text-ink-soft hover:bg-canvas"
               : "bg-accent-soft text-accent-deep"
           }`}
         >
@@ -411,55 +447,70 @@ export default function ChatPanel() {
   }, [messages, sending, pendingChange]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5">
+    <div className="flex h-full min-h-0 flex-col bg-paper">
       {/* panel header */}
-      <div className="flex shrink-0 items-center justify-between rounded-[5px] border-[1.5px] border-frame bg-paper py-1 pl-2 pr-2">
-        <button
-          onClick={ws.newConversation}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13.5px] font-medium text-ink transition-colors hover:bg-cream"
-        >
-          <Plus size={16} strokeWidth={2.2} />
-          New conversation
-        </button>
-        <Dropdown
-          align="right"
-          items={[
-            {
-              label: "This document",
-              desc: "Conversation tied to the open document",
-              active: scope === "document",
-              onSelect: () => setScope("document"),
-            },
-            {
-              label: "Cross-session",
-              desc: "Continues across documents and sessions",
-              active: scope === "cross",
-              onSelect: () => setScope("cross"),
-            },
-          ]}
-          trigger={
-            <button className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-cream">
-              <Waypoints size={14} />
-              {scope === "cross" ? "Cross-session" : "This document"}
-              <ChevronDown size={13} className="text-muted" />
-            </button>
-          }
-        />
+      <div className="flex shrink-0 items-center justify-between gap-1 border-b border-line py-2 pl-3 pr-2">
+        <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-ink">
+          <Sparkles size={15} className="shrink-0 text-accent" />
+          AI assistant
+        </span>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            onClick={ws.newConversation}
+            title="New conversation"
+            aria-label="New conversation"
+            className="rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
+          >
+            <Plus size={16} strokeWidth={2.2} />
+          </button>
+          <Dropdown
+            align="right"
+            items={[
+              {
+                label: "This document",
+                desc: "Conversation tied to the open document",
+                active: scope === "document",
+                onSelect: () => setScope("document"),
+              },
+              {
+                label: "Cross-session",
+                desc: "Continues across documents and sessions",
+                active: scope === "cross",
+                onSelect: () => setScope("cross"),
+              },
+            ]}
+            trigger={
+              <button
+                title={scope === "cross" ? "Scope: cross-session" : "Scope: this document"}
+                aria-label="Conversation scope"
+                className="rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink data-[open]:bg-canvas"
+              >
+                <Waypoints size={15} />
+              </button>
+            }
+          />
+          <button
+            onClick={ws.closePanel}
+            title="Close panel"
+            aria-label="Close panel"
+            className="rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       {/* messages + composer */}
-      <div className="flex min-h-0 flex-1 flex-col rounded-[5px] border-[1.5px] border-frame bg-paper">
-        <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3.5">
-          {messages.length === 0 && <WelcomeCard />}
-          {messages.map((m) => (
-            <MessageBubble key={m.id} message={m} />
-          ))}
-          {sending && <TypingBubble />}
-          {!sending && pendingChange && <PendingChangeCard key={pendingChange.messageId} />}
-        </div>
-        <div className="shrink-0 border-t border-line" />
-        <Composer />
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3.5">
+        {messages.length === 0 && <WelcomeCard />}
+        {messages.map((m) => (
+          <MessageBubble key={m.id} message={m} />
+        ))}
+        {sending && <TypingBubble />}
+        {!sending && pendingChange && <PendingChangeCard key={pendingChange.messageId} />}
       </div>
+      <div className="shrink-0 border-t border-line" />
+      <Composer />
     </div>
   );
 }

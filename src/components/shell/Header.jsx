@@ -1,192 +1,214 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Plus, Upload, Download, ChevronDown, X, FileText, Menu, Loader2,
-  FileType2, FileCode2, FileDown, Printer, GitCommit, Users,
+  Check, Loader2, TriangleAlert, Users, UserRound,
+  Settings, LogOut, Pencil, Plus, X,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
-import Logo from "@/components/Logo";
+import { LogoMark } from "@/components/Logo";
 import Dropdown from "@/components/ui/Dropdown";
 import PresenceBar from "@/components/collab/PresenceBar";
 
-const ACCEPT = ".pdf,.docx,.txt,.rtf,.md,.markdown,.html,.htm";
-
+// Every open document as a tab, browser-style: click to switch, × to close,
+// and an always-visible pencil on the active tab so renaming is discoverable
+// (the pencil or the active tab's label starts an inline edit).
 function DocTabs() {
   const ws = useWorkspace();
-  if (!ws.openDocs.length) return null;
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState("");
+  const activeTabRef = useRef(null);
+
+  // Keep the active tab in view when the strip overflows (narrow screens).
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [ws.activeDocId]);
+
+  const startRename = (doc) => {
+    setEditingId(doc.id);
+    setDraft(doc.title);
+  };
+  const commit = () => {
+    const doc = ws.openDocs.find((d) => d.id === editingId);
+    const next = draft.trim();
+    if (doc && next && next !== doc.title) ws.renameDocument(doc.id, next);
+    setEditingId(null);
+  };
+
   return (
-    <div className="hidden min-w-0 flex-1 items-center rounded-[5px] border-[1.5px] border-frame bg-paper p-1 md:flex">
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {ws.openDocs.map((doc, i) => {
-          const active = doc.id === ws.activeDocId;
-          return (
-            <div
-              key={doc.id}
-              role="tab"
-              aria-selected={active}
-              tabIndex={0}
-              onClick={() => ws.openDocument(doc.id)}
-              onKeyDown={(e) => e.key === "Enter" && ws.openDocument(doc.id)}
-              className={`group flex max-w-56 min-w-0 shrink-0 cursor-pointer items-center gap-1.5 rounded-[4px] px-2.5 py-1.5 text-[13px] transition-colors ${
-                active ? "bg-ink text-white" : "text-ink-soft hover:bg-cream"
-              }`}
-            >
-              <span className={`text-[10.5px] ${active ? "text-white/60" : "text-muted"}`}>{i + 1}</span>
-              <FileText size={13} className={active ? "text-white/80" : "text-muted"} />
-              <span className="truncate font-medium">
-                {doc.sourceFile?.name || doc.title}
-              </span>
-              <button
-                aria-label={`Close ${doc.title}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  ws.closeDocument(doc.id);
+    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {ws.openDocs.length === 0 && (
+        <span className="font-display px-1 text-[19px] font-bold tracking-tight text-ink">
+          MagicPen
+        </span>
+      )}
+      {ws.openDocs.map((doc) => {
+        const active = doc.id === ws.activeDocId;
+        const editing = editingId === doc.id;
+        return (
+          <div
+            key={doc.id}
+            ref={active ? activeTabRef : undefined}
+            className={`group flex h-9 max-w-[210px] shrink-0 items-center gap-1 rounded-lg px-2.5 transition-colors ${
+              active ? "bg-accent-soft text-accent-deep" : "text-ink-soft hover:bg-canvas"
+            }`}
+          >
+            {editing ? (
+              <input
+                autoFocus
+                value={draft}
+                aria-label="Document name"
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commit();
+                  }
+                  if (e.key === "Escape") setEditingId(null);
                 }}
-                className={`-mr-0.5 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 ${
-                  active ? "hover:bg-white/20" : "hover:bg-line"
-                }`}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                className="w-36 bg-transparent text-[13px] font-medium text-ink outline-none"
+              />
+            ) : (
+              <>
+                <button
+                  onClick={() => (active ? startRename(doc) : ws.openDocument(doc.id))}
+                  title={active ? "Rename" : doc.sourceFile?.name || doc.title}
+                  className="min-w-0 truncate text-[13px] font-medium"
+                >
+                  {doc.sourceFile?.name || doc.title}
+                </button>
+                {active && (
+                  <button
+                    onClick={() => startRename(doc)}
+                    aria-label={`Rename ${doc.title}`}
+                    title="Rename"
+                    className="shrink-0 rounded p-0.5 opacity-70 transition-opacity hover:bg-accent-faint hover:opacity-100"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ws.closeDocument(doc.id);
+                  }}
+                  aria-label={`Close ${doc.title}`}
+                  className={`shrink-0 rounded p-0.5 transition-opacity ${
+                    active
+                      ? "opacity-70 hover:bg-accent-faint hover:opacity-100"
+                      : "opacity-0 hover:bg-line focus-visible:opacity-100 group-hover:opacity-100"
+                  }`}
+                >
+                  <X size={12.5} />
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
+      <button
+        onClick={ws.createBlankDocument}
+        aria-label="New document"
+        title="New document"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
+      >
+        <Plus size={16} strokeWidth={2.2} />
+      </button>
     </div>
   );
 }
 
+// "Saving… / Saved" indicator next to the title, driven by the autosave
+// lifecycle in the workspace context.
+function SaveIndicator() {
+  const ws = useWorkspace();
+  if (!ws.activeDocId) return null;
+  const state = ws.saveState;
+  if (state === "idle") return null;
+  const map = {
+    pending: { icon: <Loader2 size={12} className="animate-spin" />, label: "Saving…" },
+    saving: { icon: <Loader2 size={12} className="animate-spin" />, label: "Saving…" },
+    saved: { icon: <Check size={12} />, label: "Saved" },
+    error: { icon: <TriangleAlert size={12} className="text-red-600" />, label: "Not saved" },
+  };
+  const s = map[state];
+  if (!s) return null;
+  return (
+    <span className="hidden shrink-0 items-center gap-1 px-1 text-[11.5px] text-muted sm:flex">
+      {s.icon}
+      {s.label}
+    </span>
+  );
+}
+
+function AccountMenu() {
+  const ws = useWorkspace();
+  const { user } = ws;
+  const initials = (() => {
+    const src = user?.name || user?.email || "?";
+    const parts = src.trim().split(/\s+/);
+    return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
+  })();
+
+  return (
+    <Dropdown
+      align="right"
+      items={[
+        { heading: user?.name || user?.email || "Account" },
+        { label: "Profile", icon: <UserRound size={14} />, onSelect: () => ws.setInfoModal("profile") },
+        { label: "Settings", icon: <Settings size={14} />, onSelect: () => ws.setInfoModal("settings") },
+        "divider",
+        { label: "Sign out", icon: <LogOut size={14} />, onSelect: ws.signOut },
+      ]}
+      trigger={
+        <button
+          aria-label="Account"
+          title={user?.email}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-[12.5px] font-bold text-white shadow-card transition-opacity hover:opacity-90"
+        >
+          {initials}
+        </button>
+      }
+    />
+  );
+}
+
+// Top bar: brand mark, then every open document as a tab (switch, rename,
+// close, plus new), save state, then comments / share / account on the right.
+// The document library lives in the right rail's Documents panel.
 export default function Header() {
   const ws = useWorkspace();
-  const fileRef = useRef(null);
   const hasDoc = !!ws.activeDocId;
 
   return (
-    <header className="flex shrink-0 items-center gap-3 px-3 py-2.5 md:px-5 md:py-3">
-      <button
-        onClick={() => ws.setNavOpen(true)}
-        aria-label="Open menu"
-        className="rounded-lg border border-line bg-paper p-2 text-ink lg:hidden"
-      >
-        <Menu size={17} />
-      </button>
-
-      <button onClick={() => ws.setNavOpen(true)} className="hidden shrink-0 lg:block" aria-label="Open menu">
-        <Logo />
-      </button>
-      <span className="shrink-0 lg:hidden">
-        <Logo compact />
+    <header className="flex shrink-0 items-center gap-2 bg-paper px-3 py-2 md:px-4">
+      <span className="shrink-0 p-1" aria-hidden>
+        <LogoMark size={34} />
       </span>
 
       <DocTabs />
+      <SaveIndicator />
 
-      {/* mobile: active doc name */}
-      <span className="min-w-0 flex-1 truncate text-center text-[12.5px] font-medium text-ink-soft md:hidden">
-        {ws.activeDoc ? ws.activeDoc.sourceFile?.name || ws.activeDoc.title : ""}
-      </span>
-
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
         <PresenceBar peers={ws.peers} selfId={ws.user?.id} />
 
         <button
           disabled={!hasDoc}
           onClick={() => ws.setShareOpen(true)}
           title="Share this document with a link"
-          className={`flex items-center gap-2 rounded-lg border-[1.5px] px-2 py-2 text-[13.5px] font-semibold transition-colors md:px-3.5 md:py-2 ${
-            ws.activeDoc?.shared
-              ? "border-accent bg-accent-soft text-accent-deep hover:bg-accent-faint"
-              : "border-frame bg-paper text-ink hover:bg-cream"
-          } ${hasDoc ? "" : "cursor-not-allowed opacity-45"}`}
+          className={`flex items-center gap-2 rounded-full px-3.5 py-2 text-[13.5px] font-semibold transition-colors md:px-4 ${
+            hasDoc
+              ? "bg-accent-faint text-accent-deep hover:bg-accent-disabled/60"
+              : "cursor-not-allowed bg-canvas text-muted"
+          }`}
         >
-          <Users size={16} strokeWidth={2.2} />
+          <Users size={15} strokeWidth={2.2} />
           <span className="hidden md:inline">{ws.activeDoc?.shared ? "Shared" : "Share"}</span>
         </button>
 
-        <button
-          onClick={ws.createBlankDocument}
-          title="New blank document"
-          aria-label="New blank document"
-          className="rounded-lg border-[1.5px] border-frame bg-paper p-2 text-ink transition-colors hover:bg-cream md:p-2.5"
-        >
-          <Plus size={16} strokeWidth={2.2} />
-        </button>
-
-        <button
-          onClick={() => fileRef.current?.click()}
-          title="Upload a document"
-          className="flex items-center gap-2 rounded-lg border-[1.5px] border-frame bg-paper px-2 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-cream md:px-3.5 md:py-2"
-        >
-          {ws.uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} strokeWidth={2.2} />}
-          <span className="hidden md:inline">Upload</span>
-        </button>
-
-        <button
-          disabled={!hasDoc}
-          onClick={() => ws.setCommitOpen(true)}
-          title="Commit this version — a snapshot you can always come back to"
-          className={`flex items-center gap-2 rounded-lg border-[1.5px] border-frame bg-paper px-2 py-2 text-[13.5px] font-semibold text-ink transition-colors md:px-3.5 md:py-2 ${
-            hasDoc ? "hover:bg-cream" : "cursor-not-allowed opacity-45"
-          }`}
-        >
-          <GitCommit size={16} strokeWidth={2.2} />
-          <span className="hidden md:inline">Commit</span>
-        </button>
-
-        <div
-          className={`flex items-stretch overflow-hidden rounded-lg text-white shadow-card transition-colors ${
-            hasDoc ? "bg-accent" : "cursor-not-allowed bg-accent-disabled"
-          }`}
-        >
-          <button
-            disabled={!hasDoc}
-            onClick={() => ws.downloadDocument("docx")}
-            className={`flex items-center gap-2 py-2 pl-2.5 pr-2 text-[13.5px] font-semibold md:pl-3.5 ${
-              hasDoc ? "hover:bg-accent-deep" : ""
-            }`}
-          >
-            <Download size={16} strokeWidth={2.2} />
-            <span className="hidden md:inline">Download</span>
-            <span className="hidden font-normal text-white/75 md:inline">· Word</span>
-          </button>
-          <Dropdown
-            align="right"
-            items={[
-              { label: "Word (.docx)", icon: <FileType2 size={14} />, onSelect: () => ws.downloadDocument("docx") },
-              {
-                label: "PDF (print)",
-                desc: "Choose 'Save as PDF' and turn off headers & footers",
-                icon: <Printer size={14} />,
-                onSelect: () => ws.downloadDocument("pdf"),
-              },
-              { label: "Markdown (.md)", icon: <FileDown size={14} />, onSelect: () => ws.downloadDocument("md") },
-              { label: "HTML (.html)", icon: <FileCode2 size={14} />, onSelect: () => ws.downloadDocument("html") },
-              { label: "Plain text (.txt)", icon: <FileText size={14} />, onSelect: () => ws.downloadDocument("txt") },
-            ]}
-            trigger={
-              <button
-                disabled={!hasDoc}
-                aria-label="Choose download format"
-                className={`border-l border-white/25 px-1.5 ${hasDoc ? "hover:bg-accent-deep" : ""}`}
-              >
-                <ChevronDown size={15} />
-              </button>
-            }
-          />
-        </div>
+        <AccountMenu />
       </div>
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept={ACCEPT}
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          ws.uploadFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
     </header>
   );
 }

@@ -45,7 +45,8 @@ const IMAGE_WIDTHS = [
 
 // Read + downscale an image for inline embedding (base64 in the doc). Large
 // photos get capped at 1600px wide; PNGs stay PNG so transparency survives.
-async function fileToInsertableSrc(file) {
+// Exported so the menu bar's Insert → Image reuses the exact same pipeline.
+export async function fileToInsertableSrc(file) {
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -73,9 +74,9 @@ async function fileToInsertableSrc(file) {
 
 const TEXT_COLORS = [
   { label: "Default", value: null },
-  { label: "Gray", value: "#6b6a60" },
+  { label: "Gray", value: "#5c6b7a" },
   { label: "Red", value: "#c53929" },
-  { label: "Coral", value: "#e8684a" },
+  { label: "Orange", value: "#ea580c" },
   { label: "Amber", value: "#b45309" },
   { label: "Green", value: "#1e7f4f" },
   { label: "Blue", value: "#1d63d8" },
@@ -100,8 +101,8 @@ function ToolButton({ onClick, active, disabled, label, children }) {
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
-        active ? "bg-accent-soft text-accent-deep" : "text-ink hover:bg-cream"
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+        active ? "bg-accent-soft text-accent-deep" : "text-ink hover:bg-canvas"
       } disabled:cursor-not-allowed disabled:opacity-35`}
     >
       {children}
@@ -114,7 +115,7 @@ function LabeledDropdown({ label, value, items }) {
     <Dropdown
       items={items}
       trigger={
-        <button className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] text-ink transition-colors hover:bg-cream">
+        <button className="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] text-ink transition-colors hover:bg-canvas">
           <span className="text-muted">{label}</span>
           <span className="font-medium">{value}</span>
           <ChevronDown size={13} className="text-muted" />
@@ -150,7 +151,9 @@ function Swatches({ title, colors, current, onPick }) {
   );
 }
 
-export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
+// variant: "pill" floats on a canvas (share page); "inline" renders only the
+// controls, for embedding in the single chrome row next to the menus.
+export default function Toolbar({ editor, findOpen = false, onToggleFind, variant = "pill" }) {
   const ws = useWorkspace();
   // null = closed; otherwise the link href being edited ("" for a new link).
   const [linkDraft, setLinkDraft] = useState(null);
@@ -253,7 +256,14 @@ export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
     : [];
 
   return (
-    <div className="flex shrink-0 items-center gap-0.5 overflow-x-auto rounded-[5px] border-[1.5px] border-frame bg-paper px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    // Docs-style rounded strip sitting on the canvas.
+    <div
+      className={
+        variant === "inline"
+          ? "flex shrink-0 items-center gap-0.5"
+          : "flex shrink-0 items-center gap-0.5 overflow-x-auto rounded-full border border-line bg-paper px-2.5 py-1 shadow-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      }
+    >
       <ToolButton label="Undo" disabled={!s?.canUndo} onClick={run((c) => c.undo())}>
         <Undo2 size={16} strokeWidth={2} />
       </ToolButton>
@@ -318,7 +328,7 @@ export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
 
       <Dropdown
         trigger={
-          <button title="Text color" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-cream ${s?.color ? "text-accent-deep" : "text-ink"}`}>
+          <button title="Text color" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-canvas ${s?.color ? "text-accent-deep" : "text-ink"}`}>
             <Palette size={16} strokeWidth={2} />
           </button>
         }
@@ -338,7 +348,7 @@ export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
 
       <Dropdown
         trigger={
-          <button title="Highlight" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-cream ${s?.highlight ? "text-accent-deep" : "text-ink"}`}>
+          <button title="Highlight" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-canvas ${s?.highlight ? "text-accent-deep" : "text-ink"}`}>
             <Highlighter size={16} strokeWidth={2} />
           </button>
         }
@@ -374,14 +384,17 @@ export default function Toolbar({ editor, findOpen = false, onToggleFind }) {
         />
       )}
 
-      <ToolButton label="Find & replace (Ctrl+F)" active={findOpen} onClick={onToggleFind}>
-        <Search size={16} strokeWidth={2.1} />
-      </ToolButton>
+      {/* The share page renders this toolbar without a find panel to drive. */}
+      {onToggleFind && (
+        <ToolButton label="Find & replace (Ctrl+F)" active={findOpen} onClick={onToggleFind}>
+          <Search size={16} strokeWidth={2.1} />
+        </ToolButton>
+      )}
 
       <Dropdown
         align="right"
         trigger={
-          <button title="More formatting" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink transition-colors hover:bg-cream">
+          <button title="More formatting" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-canvas">
             <MoreHorizontal size={16} strokeWidth={2.2} />
           </button>
         }

@@ -1,7 +1,7 @@
 import AuthPage from "@/components/auth/AuthPage";
 
 export const metadata = {
-  title: "Create account — SuperDocs",
+  title: "Create account — MagicPen",
 };
 
 export default function RegisterPage() {

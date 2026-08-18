@@ -13,7 +13,7 @@ import { signConnectState, gdocsConnectUrl } from "@/lib/gdocs";
 
 /* --------------------------- identity & linking --------------------------- */
 
-// Resolve the SuperDocs account linked to a Google identity (the add-on user's
+// Resolve the MagicPen account linked to a Google identity (the add-on user's
 // email). Returns null when the user hasn't connected an account yet.
 export async function resolveUserByGoogleId(googleUserId) {
   const link = await GoogleLinks.get(googleUserId);
@@ -22,8 +22,8 @@ export async function resolveUserByGoogleId(googleUserId) {
 }
 
 // Signs the short-lived connect link the add-on shows when the Google user
-// hasn't linked a SuperDocs account. Clicking it opens the browser connect flow
-// (/gdocs/connect), which proves their SuperDocs session and writes the link.
+// hasn't linked a MagicPen account. Clicking it opens the browser connect flow
+// (/gdocs/connect), which proves their MagicPen session and writes the link.
 export async function connectUrlForGoogleUser(googleUserId) {
   const state = await signConnectState({ googleUserId });
   return gdocsConnectUrl(state);

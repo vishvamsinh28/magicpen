@@ -34,7 +34,7 @@ yarn-error.log*
 .env*
 !.env.example
 
-# superdocs local fallback store
+# magicpen local fallback store
 /.data/
 
 # vercel

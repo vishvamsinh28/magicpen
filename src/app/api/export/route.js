@@ -38,7 +38,7 @@ export async function POST(request) {
     if (err.code === "bad_format") {
       return Response.json({ error: { message: err.message } }, { status: 400 });
     }
-    console.error("[superdocs] export failed:", err);
+    console.error("[magicpen] export failed:", err);
     return Response.json({ error: { message: "Export failed. Please try again." } }, { status: 500 });
   }
 }

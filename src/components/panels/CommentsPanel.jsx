@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import CommentsSidebar from "@/components/collab/CommentsSidebar";
 
@@ -11,17 +12,19 @@ export default function CommentsPanel() {
 
   if (!activeDocId) {
     return (
-      <div className="flex h-full min-h-0 flex-col gap-2.5">
-        <div className="flex shrink-0 items-center justify-between rounded-[5px] border-[1.5px] border-frame bg-paper py-1 pl-3 pr-2">
-          <span className="py-1.5 text-[13.5px] font-semibold text-ink">Comments</span>
+      <div className="flex h-full min-h-0 flex-col bg-paper">
+        <div className="flex shrink-0 items-center justify-between border-b border-line py-2 pl-3 pr-2">
+          <span className="text-[13.5px] font-semibold text-ink">Comments</span>
           <button
-            onClick={() => ws.setLeftView("chat")}
-            className="rounded-md px-2 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-cream"
+            onClick={ws.closePanel}
+            title="Close panel"
+            aria-label="Close panel"
+            className="rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
           >
-            Back to chat
+            <X size={16} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 rounded-[5px] border-[1.5px] border-frame bg-paper px-3 py-3.5">
+        <div className="min-h-0 flex-1 px-3 py-3.5">
           <p className="px-1 py-2 text-[13px] leading-relaxed text-muted">
             Open a document to read and write comments on it.
           </p>
@@ -37,7 +40,7 @@ export default function CommentsPanel() {
       editor={editorInstance}
       actor={user ? { id: user.id, name: user.name || user.email } : null}
       role="owner"
-      onClose={() => ws.setLeftView("chat")}
+      onClose={ws.closePanel}
     />
   );
 }

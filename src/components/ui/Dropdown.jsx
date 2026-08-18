@@ -92,32 +92,38 @@ export default function Dropdown({
         })}
       </span>
       {/* Portal to <body>: hosts with a persistent CSS transform (e.g. the
-          files modal's sd-pop-in) re-anchor fixed positioning to themselves,
+          files modal's mp-pop-in) re-anchor fixed positioning to themselves,
           which pushed the menu away from its trigger once the host scrolled. */}
       {open &&
         createPortal(
           <div
             ref={menuRef}
             style={style}
-            className={`min-w-44 max-w-[260px] rounded-lg border border-line bg-paper p-1 shadow-pop sd-pop-in ${menuClassName}`}
+            className={`min-w-44 max-w-[260px] rounded-lg border border-line bg-paper p-1 shadow-pop mp-pop-in ${menuClassName}`}
           >
           {items
             ? items.map((item, i) =>
                 item === "divider" ? (
                   <div key={i} className="my-1 border-t border-line" />
+                ) : item.heading ? (
+                  // Non-interactive section label (e.g. "Download" in File).
+                  <p key={i} className="px-2.5 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+                    {item.heading}
+                  </p>
                 ) : (
                   <button
                     key={i}
+                    disabled={item.disabled}
                     onClick={() => {
                       close();
                       item.onSelect?.();
                     }}
-                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                       item.danger
                         ? "text-red-700 hover:bg-red-50"
                         : item.active
                           ? "bg-accent-soft font-medium text-accent-deep"
-                          : "text-ink hover:bg-cream"
+                          : "text-ink hover:bg-canvas"
                     }`}
                   >
                     {item.icon && <span className="shrink-0 text-muted">{item.icon}</span>}
@@ -129,7 +135,7 @@ export default function Dropdown({
                         </span>
                       )}
                     </span>
-                    {item.right && <span className="shrink-0 text-muted">{item.right}</span>}
+                    {item.right && <span className="shrink-0 text-[11px] text-muted">{item.right}</span>}
                   </button>
                 )
               )

@@ -15,7 +15,7 @@ const MAX_DOC_CHARS = 150_000;
 const MAX_ATTACHMENT_CHARS = 20_000;
 const MAX_HISTORY_MESSAGES = 20;
 
-const SYSTEM_PROMPT = `You are the SuperDocs assistant — an expert editor embedded in a document editing app. You edit the user's document IN PLACE by returning edit operations; you never make the user copy-paste anything.
+const SYSTEM_PROMPT = `You are the MagicPen assistant — an expert editor embedded in a document editing app. You edit the user's document IN PLACE by returning edit operations; you never make the user copy-paste anything.
 
 The current document is provided as a numbered list of HTML blocks:
 [0] <h1>...</h1>
@@ -234,7 +234,7 @@ export async function pdfToStructuredHtml(buffer, links = [], { placeholders = [
       response = await call({ temperature: 0.1 });
     } catch (err) {
       if (isQuotaError(err)) throw quotaError();
-      console.warn("[superdocs] Gemini PDF conversion failed, using text fallback:", err.message);
+      console.warn("[magicpen] Gemini PDF conversion failed, using text fallback:", err.message);
       return null;
     }
   }
@@ -434,7 +434,7 @@ export async function runAssistant({
     }
 
     if (!problems.length || attempt === 1) return result;
-    console.warn("[superdocs] AI edit self-check failed, retrying once:", problems.join(" | "));
+    console.warn("[magicpen] AI edit self-check failed, retrying once:", problems.join(" | "));
     contents.push(
       { role: "model", parts: [{ text: response.text }] },
       {

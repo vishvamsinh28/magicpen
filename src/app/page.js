@@ -4,9 +4,9 @@ import LandingPage from "@/components/landing/LandingPage";
 import { getUserFromRequest } from "@/lib/auth";
 
 export const metadata = {
-  title: "SuperDocs — Edit documents with AI, in place",
+  title: "MagicPen — Edit documents with AI, in place",
   description:
-    "Upload a document, ask in plain English, and SuperDocs edits only what you ask for — formatting, tables, and footnotes survive. Work on it from Slack or Google Docs, share a live link, commit versions, and leave with a real file.",
+    "Upload a document, ask in plain English, and MagicPen edits only what you ask for — formatting, tables, and footnotes survive. Work on it from Slack or Google Docs, share a live link, commit versions, and leave with a real file.",
 };
 
 export default async function Home() {

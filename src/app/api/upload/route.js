@@ -23,7 +23,7 @@ export async function POST(request) {
   try {
     parsed = await parseFileToHtml({ buffer, filename: file.name });
   } catch (err) {
-    console.error("[superdocs] parse failed:", err);
+    console.error("[magicpen] parse failed:", err);
     if (err.code === "ai_quota") {
       return Response.json({ error: { message: err.message, code: err.code } }, { status: 429 });
     }

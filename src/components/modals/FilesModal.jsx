@@ -26,7 +26,7 @@ function DocCard({ doc, selected, selectMode, onToggleSelect, onOpen, onRename, 
         className={`absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border-[1.5px] shadow-card transition-opacity ${
           selected
             ? "border-accent bg-accent text-white"
-            : `border-frame bg-paper text-transparent hover:text-muted ${
+            : `border-line-strong bg-paper text-transparent hover:text-muted ${
                 selectMode ? "" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
               }`
         }`}
@@ -59,7 +59,7 @@ function DocCard({ doc, selected, selectMode, onToggleSelect, onOpen, onRename, 
           trigger={
             <button
               aria-label="Document options"
-              className="shrink-0 rounded-md p-1 text-muted opacity-0 transition-opacity hover:bg-cream hover:text-ink focus:opacity-100 group-hover:opacity-100"
+              className="shrink-0 rounded-md p-1 text-muted opacity-0 transition-opacity hover:bg-canvas hover:text-ink focus:opacity-100 group-hover:opacity-100"
             >
               <EllipsisVertical size={16} />
             </button>
@@ -174,14 +174,14 @@ export default function FilesModal() {
             <span className="text-[13px] font-semibold text-ink">{selected.size} selected</span>
             <button
               onClick={() => setSelected(new Set((docs || []).map((d) => d.id)))}
-              className="rounded-md px-2 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+              className="rounded-md px-2 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
             >
               Select all
             </button>
             <div className="flex-1" />
             <button
               onClick={() => setSelected(new Set())}
-              className="rounded-lg border-[1.5px] border-frame bg-paper px-3 py-1.5 text-[13px] font-semibold text-ink transition-colors hover:bg-cream"
+              className="rounded-lg border border-line-strong bg-paper px-3 py-1.5 text-[13px] font-semibold text-ink transition-colors hover:bg-canvas"
             >
               Cancel
             </button>

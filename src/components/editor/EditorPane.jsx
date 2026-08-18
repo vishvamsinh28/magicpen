@@ -13,7 +13,6 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useCollab } from "@/components/collab/useCollab";
 import { createExtensions } from "./extensions";
 import { findMatches, searchPluginKey } from "./search";
-import Toolbar from "./Toolbar";
 
 const ZOOM_STEPS = [50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200];
 const ACCEPT = ".pdf,.docx,.txt,.rtf,.md,.markdown,.html,.htm";
@@ -36,7 +35,7 @@ function VersionBar() {
 
   return (
     <div className="pointer-events-none sticky top-2.5 z-10 flex justify-center px-3">
-      <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-full border-[1.5px] border-frame bg-paper py-1.5 pl-4 pr-1.5 shadow-pop">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-full border border-line bg-paper py-1.5 pl-4 pr-1.5 shadow-pop">
         <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-ink">
           <Eye size={15} />
           <span className="max-w-44 truncate">
@@ -57,7 +56,7 @@ function VersionBar() {
             className={`rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors ${
               versionPreview.compare
                 ? "border-accent bg-accent-soft text-accent-deep"
-                : "border-line bg-paper text-ink-soft hover:bg-cream"
+                : "border-line bg-paper text-ink-soft hover:bg-canvas"
             }`}
           >
             Compare
@@ -72,7 +71,7 @@ function VersionBar() {
           <button
             onClick={ws.closeVersionPreview}
             aria-label="Back to current version"
-            className="rounded-full border border-line bg-paper p-1.5 text-ink-soft transition-colors hover:bg-cream"
+            className="rounded-full border border-line bg-paper p-1.5 text-ink-soft transition-colors hover:bg-canvas"
           >
             <X size={13} />
           </button>
@@ -110,7 +109,7 @@ function ReviewBar() {
 
   return (
     <div className="pointer-events-none sticky top-2.5 z-10 flex justify-center px-3">
-      <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-full border-[1.5px] border-accent bg-paper py-1.5 pl-4 pr-1.5 shadow-pop">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-full border border-accent bg-paper py-1.5 pl-4 pr-1.5 shadow-pop">
         <span className="flex items-center gap-1.5 text-[13px] font-semibold text-accent-deep">
           <ShieldCheck size={15} />
           Reviewing changes
@@ -136,7 +135,7 @@ function ReviewBar() {
           </button>
           <button
             onClick={ws.rejectPendingChange}
-            className="rounded-full border border-line bg-paper px-3 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+            className="rounded-full border border-line bg-paper px-3 py-1 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
           >
             Dismiss
           </button>
@@ -258,7 +257,7 @@ function FindReplacePanel({ editor, focusNonce, onClose }) {
   };
 
   return (
-    <div className="absolute right-3 top-3 z-30 w-[340px] max-w-[calc(100%-24px)] rounded-xl border-[1.5px] border-frame bg-paper p-2 shadow-pop">
+    <div className="absolute right-3 top-3 z-30 w-[340px] max-w-[calc(100%-24px)] rounded-xl border border-line bg-paper p-2 shadow-pop">
       <div className="flex items-center gap-1">
         <input
           ref={inputRef}
@@ -276,18 +275,18 @@ function FindReplacePanel({ editor, focusNonce, onClose }) {
           title="Match case"
           aria-pressed={caseSensitive}
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors ${
-            caseSensitive ? "bg-accent-soft text-accent-deep" : "text-ink-soft hover:bg-cream"
+            caseSensitive ? "bg-accent-soft text-accent-deep" : "text-ink-soft hover:bg-canvas"
           }`}
         >
           <CaseSensitive size={15} />
         </button>
-        <button onClick={() => step(-1)} disabled={!matchCount} title="Previous match (Shift+Enter)" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-cream disabled:opacity-35">
+        <button onClick={() => step(-1)} disabled={!matchCount} title="Previous match (Shift+Enter)" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas disabled:opacity-35">
           <ArrowUp size={14} />
         </button>
-        <button onClick={() => step(1)} disabled={!matchCount} title="Next match (Enter)" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-cream disabled:opacity-35">
+        <button onClick={() => step(1)} disabled={!matchCount} title="Next match (Enter)" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas disabled:opacity-35">
           <ArrowDown size={14} />
         </button>
-        <button onClick={close} aria-label="Close find and replace" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-cream">
+        <button onClick={close} aria-label="Close find and replace" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas">
           <X size={14} />
         </button>
       </div>
@@ -311,14 +310,14 @@ function FindReplacePanel({ editor, focusNonce, onClose }) {
         <button
           onClick={replaceOne}
           disabled={!matchCount}
-          className="h-8 shrink-0 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-cream disabled:opacity-35"
+          className="h-8 shrink-0 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-canvas disabled:opacity-35"
         >
           Replace
         </button>
         <button
           onClick={replaceAll}
           disabled={!matchCount}
-          className="h-8 shrink-0 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-cream disabled:opacity-35"
+          className="h-8 shrink-0 rounded-md border border-line px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-canvas disabled:opacity-35"
         >
           All
         </button>
@@ -342,7 +341,7 @@ function OutlinePanel({ editor, tick, onNavigate }) {
   }, [editor, tick]);
 
   return (
-    <div className="absolute left-3 top-12 z-20 flex max-h-[65%] w-60 flex-col rounded-xl border-[1.5px] border-frame bg-paper shadow-pop">
+    <div className="absolute left-3 top-12 z-20 flex max-h-[65%] w-60 flex-col rounded-xl border border-line bg-paper shadow-pop">
       <p className="shrink-0 border-b border-line px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
         Outline
       </p>
@@ -356,7 +355,7 @@ function OutlinePanel({ editor, tick, onNavigate }) {
           <button
             key={i}
             onClick={() => onNavigate(item)}
-            className={`block w-full truncate rounded-md py-1 text-left text-[12.5px] text-ink-soft transition-colors hover:bg-cream hover:text-ink ${
+            className={`block w-full truncate rounded-md py-1 text-left text-[12.5px] text-ink-soft transition-colors hover:bg-canvas hover:text-ink ${
               item.level === 1 ? "pl-2 font-semibold text-ink" : item.level === 2 ? "pl-4" : "pl-6"
             } pr-2`}
           >
@@ -377,6 +376,8 @@ export default function EditorPane() {
 
   const handlersRef = useRef({});
   handlersRef.current.onEditorUpdate = ws.onEditorUpdate;
+  handlersRef.current.openFind = ws.openFind;
+  handlersRef.current.closeFind = ws.closeFind;
 
   const suppressRef = useRef(false);
   const [zoom, setZoom] = useState("fit"); // 'fit' | number (percent)
@@ -385,8 +386,9 @@ export default function EditorPane() {
   const [tick, setTick] = useState(0); // re-render on editor create/update/selection
   const fileInputRef = useRef(null);
 
-  const [findOpen, setFindOpen] = useState(false);
-  const [findNonce, setFindNonce] = useState(0); // re-focus the find input
+  // Find & replace open/focus state lives in the workspace context so the
+  // Edit menu and Ctrl+F drive the same panel.
+  const { findOpen, findNonce } = ws;
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [countMode, setCountMode] = useState("words"); // 'words' | 'chars' | 'charsNoSpaces'
   // Cmd/Ctrl+Shift+V just before a paste event → that paste is plain-text.
@@ -526,8 +528,7 @@ export default function EditorPane() {
       if (t instanceof HTMLElement && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if (overlayRef.current) return;
       e.preventDefault();
-      setFindOpen(true);
-      setFindNonce((n) => n + 1);
+      handlersRef.current.openFind?.();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -536,7 +537,7 @@ export default function EditorPane() {
   // The find panel and outline make no sense over a diff preview.
   useEffect(() => {
     if (overlayActive) {
-      setFindOpen(false);
+      handlersRef.current.closeFind?.();
       setOutlineOpen(false);
     }
   }, [overlayActive]);
@@ -596,25 +597,14 @@ export default function EditorPane() {
 
   return (
     <section
-      className="flex h-full min-w-0 flex-1 flex-col gap-2.5"
+      className="flex h-full min-w-0 flex-1 flex-col"
       onKeyDownCapture={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "v") {
           plainPasteAtRef.current = Date.now();
         }
       }}
     >
-      <div className={overlayActive ? "pointer-events-none opacity-60" : undefined} aria-disabled={overlayActive}>
-        <Toolbar
-          editor={editor}
-          findOpen={findOpen}
-          onToggleFind={() => {
-            setFindOpen((o) => !o);
-            setFindNonce((n) => n + 1);
-          }}
-        />
-      </div>
-
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-[5px] border-[1.5px] border-frame bg-parchment">
+      <div className="relative min-h-0 flex-1">
         <div
           className="h-full overflow-y-auto"
           onDragEnter={(e) => { if (hasFiles(e)) { e.preventDefault(); setDragDepth((d) => d + 1); } }}
@@ -625,10 +615,10 @@ export default function EditorPane() {
           {previewingVersion ? <VersionBar /> : reviewing && <ReviewBar />}
           <div
             style={{ zoom: zoomValue / 100 }}
-            className={`px-3 py-6 md:px-10 md:py-9 ${showDropzone ? "sd-hide-placeholder" : ""}`}
+            className={`px-3 py-6 md:px-10 md:py-8 ${showDropzone ? "mp-hide-placeholder" : ""}`}
           >
             <div
-              className={`doc-editor mx-auto w-[850px] max-w-full rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px] ${
+              className={`doc-editor mx-auto w-[850px] max-w-full rounded-[4px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px] ${
                 overlayActive ? "" : "cursor-text"
               }`}
               onClick={(e) => {
@@ -646,7 +636,7 @@ export default function EditorPane() {
         </div>
 
         {editor && findOpen && !overlayActive && (
-          <FindReplacePanel editor={editor} focusNonce={findNonce} onClose={() => setFindOpen(false)} />
+          <FindReplacePanel editor={editor} focusNonce={findNonce} onClose={ws.closeFind} />
         )}
 
         {editor && !overlayActive && !showDropzone && (
@@ -655,8 +645,8 @@ export default function EditorPane() {
             title="Outline"
             aria-label="Toggle outline"
             aria-pressed={outlineOpen}
-            className={`absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-md border-[1.5px] border-frame shadow-card transition-colors ${
-              outlineOpen ? "bg-accent-soft text-accent-deep" : "bg-paper text-ink-soft hover:bg-cream"
+            className={`absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-md border border-line shadow-card transition-colors ${
+              outlineOpen ? "bg-accent-soft text-accent-deep" : "bg-paper text-ink-soft hover:bg-canvas"
             }`}
           >
             <ListTree size={16} strokeWidth={2} />
@@ -672,7 +662,7 @@ export default function EditorPane() {
               setCountMode((m) => (m === "words" ? "chars" : m === "chars" ? "charsNoSpaces" : "words"))
             }
             title="Click to switch between words and characters"
-            className="absolute bottom-4 left-4 rounded-md border-[1.5px] border-frame bg-paper px-2.5 py-1.5 text-[12px] font-medium text-ink-soft shadow-card transition-colors hover:bg-cream"
+            className="absolute bottom-4 left-4 rounded-md border border-line bg-paper px-2.5 py-1.5 text-[12px] font-medium text-ink-soft shadow-card transition-colors hover:bg-canvas"
           >
             {countLabel}
           </button>
@@ -680,7 +670,7 @@ export default function EditorPane() {
 
         {showDropzone && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
-            <div className="pointer-events-auto flex w-full max-w-xl flex-col items-center rounded-lg border-2 border-dashed border-[#d9d5c7] bg-paper/60 px-8 py-14 text-center backdrop-blur-[1px]">
+            <div className="pointer-events-auto flex w-full max-w-xl flex-col items-center rounded-lg border-2 border-dashed border-line-strong bg-paper/60 px-8 py-14 text-center backdrop-blur-[1px]">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-paper shadow-card ring-1 ring-line">
                 <FileText size={26} className="text-ink-soft" strokeWidth={1.8} />
               </div>
@@ -692,7 +682,7 @@ export default function EditorPane() {
               </p>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-5 inline-flex items-center gap-2 rounded-lg border border-frame bg-paper px-4 py-2 text-sm font-medium text-ink shadow-card transition-colors hover:bg-cream"
+                className="mt-5 inline-flex items-center gap-2 rounded-full border border-line-strong bg-paper px-4 py-2 text-sm font-medium text-ink shadow-card transition-colors hover:bg-canvas"
               >
                 <Upload size={15} strokeWidth={2} />
                 Choose a file
@@ -722,17 +712,17 @@ export default function EditorPane() {
         )}
 
         {/* zoom control */}
-        <div className="absolute bottom-4 right-4 flex items-center overflow-hidden rounded-md border-[1.5px] border-frame bg-paper shadow-card">
+        <div className="absolute bottom-4 right-4 flex items-center overflow-hidden rounded-md border border-line bg-paper shadow-card">
           <button
             onClick={() => stepZoom(-1)}
             aria-label="Zoom out"
-            className="px-2.5 py-1.5 text-ink transition-colors hover:bg-cream"
+            className="px-2.5 py-1.5 text-ink transition-colors hover:bg-canvas"
           >
             <Minus size={14} strokeWidth={2.2} />
           </button>
           <button
             onClick={() => setZoom("fit")}
-            className="min-w-[52px] px-2 py-1.5 text-center text-[13px] font-semibold text-ink transition-colors hover:bg-cream"
+            className="min-w-[52px] px-2 py-1.5 text-center text-[13px] font-semibold text-ink transition-colors hover:bg-canvas"
             title="Reset zoom"
           >
             {zoom === "fit" ? "Fit" : `${zoom}%`}
@@ -740,7 +730,7 @@ export default function EditorPane() {
           <button
             onClick={() => stepZoom(1)}
             aria-label="Zoom in"
-            className="px-2.5 py-1.5 text-ink transition-colors hover:bg-cream"
+            className="px-2.5 py-1.5 text-ink transition-colors hover:bg-canvas"
           >
             <Plus size={14} strokeWidth={2.2} />
           </button>

@@ -22,7 +22,7 @@ function Field({ label, type = "text", value, onChange, placeholder, autoComplet
           autoComplete={autoComplete}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
-          className={`w-full rounded-lg border-[1.5px] border-frame bg-paper py-2.5 pl-3.5 text-[14px] text-ink outline-none transition-shadow placeholder:text-muted focus:shadow-card ${
+          className={`w-full rounded-lg border-[1.5px] border-line-strong bg-paper py-2.5 pl-3.5 text-[14px] text-ink outline-none transition-shadow placeholder:text-muted focus:shadow-card ${
             password ? "pr-11" : "pr-3.5"
           }`}
         />
@@ -32,7 +32,7 @@ function Field({ label, type = "text", value, onChange, placeholder, autoComplet
             onClick={() => setShow((v) => !v)}
             aria-label={show ? "Hide password" : "Show password"}
             title={show ? "Hide password" : "Show password"}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted transition-colors hover:bg-cream hover:text-ink"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted transition-colors hover:bg-canvas hover:text-ink"
           >
             {show ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
@@ -78,7 +78,7 @@ export default function AuthPage({ mode = "login" }) {
   };
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-cream px-4 py-10">
+    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">
       <div className="w-full max-w-md">
         <Link
           href="/"
@@ -87,11 +87,11 @@ export default function AuthPage({ mode = "login" }) {
           <ArrowLeft size={14} /> Back to home
         </Link>
 
-        <div className="rounded-2xl border-[1.5px] border-frame bg-paper p-8 shadow-card">
+        <div className="rounded-2xl border-[1.5px] border-line-strong bg-paper p-8 shadow-card">
           <div className="flex items-center gap-3">
             <LogoMark size={44} />
             <div>
-              <h1 className="text-[22px] font-bold leading-tight tracking-tight text-ink">
+              <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight text-ink">
                 {isRegister ? "Create your account" : "Welcome back"}
               </h1>
               <p className="text-[13px] text-muted">
@@ -145,7 +145,7 @@ export default function AuthPage({ mode = "login" }) {
             {isRegister ? (
               <>Already have an account? <Link href="/login" className="font-semibold text-accent-deep hover:underline">Sign in</Link></>
             ) : (
-              <>New to SuperDocs? <Link href="/register" className="font-semibold text-accent-deep hover:underline">Create an account</Link></>
+              <>New to MagicPen? <Link href="/register" className="font-semibold text-accent-deep hover:underline">Create an account</Link></>
             )}
           </p>
         </div>

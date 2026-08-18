@@ -99,8 +99,8 @@ export const CommentHighlights = Extension.create({
                 Decoration.inline(range.from, range.to, {
                   class:
                     thread.threadId === activeId
-                      ? "sd-comment-hit sd-comment-hit-active"
-                      : "sd-comment-hit",
+                      ? "mp-comment-hit mp-comment-hit-active"
+                      : "mp-comment-hit",
                   "data-thread": thread.threadId,
                 })
               );
@@ -122,7 +122,7 @@ export const CommentHighlights = Extension.create({
               const range = findQuoteRange(index, thread.quote, thread.anchorStart);
               if (range && pos >= range.from && pos <= range.to) {
                 view.dom.dispatchEvent(
-                  new CustomEvent("sd-comment-click", { detail: thread.threadId, bubbles: true })
+                  new CustomEvent("mp-comment-click", { detail: thread.threadId, bubbles: true })
                 );
                 return false;
               }

@@ -39,12 +39,12 @@ export function verifyAddonSecret(header) {
 // when the add-on is configured), so there's no extra secret to manage.
 
 const stateSecret = () =>
-  new TextEncoder().encode(process.env.GDOCS_ADDON_SECRET || "superdocs-gdocs-dev");
+  new TextEncoder().encode(process.env.GDOCS_ADDON_SECRET || "magicpen-gdocs-dev");
 
 export async function signConnectState({ googleUserId }) {
   return new SignJWT({ googleUserId, kind: "gdocs_connect" })
     .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("superdocs")
+    .setIssuer("magicpen")
     .setIssuedAt()
     .setExpirationTime("15m")
     .sign(stateSecret());
@@ -52,7 +52,7 @@ export async function signConnectState({ googleUserId }) {
 
 export async function verifyConnectState(token) {
   try {
-    const { payload } = await jwtVerify(token, stateSecret(), { issuer: "superdocs" });
+    const { payload } = await jwtVerify(token, stateSecret(), { issuer: "magicpen" });
     if (payload.kind !== "gdocs_connect" || !payload.googleUserId) return null;
     return { googleUserId: payload.googleUserId };
   } catch {

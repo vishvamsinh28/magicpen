@@ -53,14 +53,14 @@ export default function PromptDialog({
 
   return createPortal(
     <div
-      className="sd-pop-in fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className="mp-pop-in fixed inset-0 z-[100] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="prompt-dialog-title"
     >
       <div className="absolute inset-0 bg-ink/40" onClick={busy ? undefined : onCancel} />
       <form
-        className="relative w-full max-w-sm rounded-xl border border-frame bg-paper p-5 shadow-pop"
+        className="relative w-full max-w-sm rounded-xl border border-line bg-paper p-5 shadow-pop"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -83,14 +83,14 @@ export default function PromptDialog({
           }}
           placeholder={placeholder}
           disabled={busy}
-          className="mt-3 w-full rounded-lg border-[1.5px] border-frame bg-paper px-3 py-2 text-[13.5px] text-ink outline-none transition-colors placeholder:text-muted focus:border-accent disabled:opacity-50"
+          className="mt-3 w-full rounded-lg border border-line-strong bg-paper px-3 py-2 text-[13.5px] text-ink outline-none transition-colors placeholder:text-muted focus:border-accent disabled:opacity-50"
         />
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="rounded-lg border-[1.5px] border-frame bg-paper px-3.5 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-cream disabled:opacity-50"
+            className="rounded-lg border border-line-strong bg-paper px-3.5 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-canvas disabled:opacity-50"
           >
             Cancel
           </button>

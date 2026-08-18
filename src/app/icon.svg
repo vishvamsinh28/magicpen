@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- MagicPen — fountain-pen nib with a magic sparkle -->
+  <path d="M22 8 C29.5 8 35 13.5 35 20.8 C35 29.5 26.8 38 22 44 C17.2 38 9 29.5 9 20.8 C9 13.5 14.5 8 22 8 Z" fill="#1a73e8"/>
+  <path d="M22 8 C29.5 8 35 13.5 35 20.8 C35 29.5 26.8 38 22 44 Z" fill="#174ea6"/>
+  <circle cx="22" cy="21.5" r="3" fill="#ffffff"/>
+  <path d="M22 25.2 V39" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M39 1 L41.2 6.8 L47 9 L41.2 11.2 L39 17 L36.8 11.2 L31 9 L36.8 6.8 Z" fill="#1a73e8"/>
+</svg>

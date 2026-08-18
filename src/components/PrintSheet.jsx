@@ -16,7 +16,7 @@ export default function PrintSheet() {
   useEffect(() => {
     if (printHtml == null) return;
 
-    document.body.classList.add("sd-printing");
+    document.body.classList.add("mp-printing");
     const prevTitle = document.title;
     const docTitle = ws.activeDoc?.title;
     if (docTitle) document.title = docTitle;
@@ -28,7 +28,7 @@ export default function PrintSheet() {
     return () => {
       clearTimeout(timer);
       window.removeEventListener("afterprint", done);
-      document.body.classList.remove("sd-printing");
+      document.body.classList.remove("mp-printing");
       document.title = prevTitle;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

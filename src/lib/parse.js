@@ -173,7 +173,7 @@ async function extractRawImages(pdf) {
       }
     }
   } catch (err) {
-    console.warn("[superdocs] PDF image extraction skipped:", err.message);
+    console.warn("[magicpen] PDF image extraction skipped:", err.message);
   }
   return rasters;
 }

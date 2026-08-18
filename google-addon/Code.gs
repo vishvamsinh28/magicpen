@@ -1,7 +1,7 @@
 /**
- * SuperDocs — Google Docs add-on (client side).
+ * MagicPen — Google Docs add-on (client side).
  *
- * This Apps Script project is a THIN CLIENT. All AI lives in the SuperDocs
+ * This Apps Script project is a THIN CLIENT. All AI lives in the MagicPen
  * backend (this Next.js app): we send the current selection (or the whole doc)
  * as HTML plus an instruction to POST {APP_BASE_URL}/api/gdocs/assist, then
  * write the edited HTML it returns back into the doc.
@@ -11,7 +11,7 @@
  * italic, colour) is not round-tripped.
  *
  * Config lives in Script Properties (Project Settings -> Script Properties):
- *   APP_BASE_URL        e.g. https://your-superdocs.example.com  (no trailing slash)
+ *   APP_BASE_URL        e.g. https://your-magicpen.example.com  (no trailing slash)
  *   GDOCS_ADDON_SECRET  the SAME value as the backend's GDOCS_ADDON_SECRET
  */
 
@@ -20,7 +20,7 @@
 function onOpen(e) {
   DocumentApp.getUi()
     .createAddonMenu()
-    .addItem('Open SuperDocs', 'showSidebar')
+    .addItem('Open MagicPen', 'showSidebar')
     .addToUi();
 }
 
@@ -29,7 +29,7 @@ function onInstall(e) {
 }
 
 function showSidebar() {
-  var ui = HtmlService.createHtmlOutputFromFile('Sidebar').setTitle('SuperDocs');
+  var ui = HtmlService.createHtmlOutputFromFile('Sidebar').setTitle('MagicPen');
   DocumentApp.getUi().showSidebar(ui);
 }
 
@@ -85,18 +85,18 @@ function userEmail_() {
 function backend_(path, payload) {
   var cfg = config_();
   if (!cfg.baseUrl || !cfg.secret) {
-    throw new Error('SuperDocs is not configured yet. Set APP_BASE_URL and GDOCS_ADDON_SECRET in Script Properties.');
+    throw new Error('MagicPen is not configured yet. Set APP_BASE_URL and GDOCS_ADDON_SECRET in Script Properties.');
   }
   var res = UrlFetchApp.fetch(cfg.baseUrl + path, {
     method: 'post',
     contentType: 'application/json',
-    headers: { 'X-SuperDocs-Addon': cfg.secret },
+    headers: { 'X-MagicPen-Addon': cfg.secret },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   });
   var data = null;
   try { data = JSON.parse(res.getContentText()); } catch (err) { data = null; }
-  if (!data) throw new Error('Unexpected response from SuperDocs (HTTP ' + res.getResponseCode() + ').');
+  if (!data) throw new Error('Unexpected response from MagicPen (HTTP ' + res.getResponseCode() + ').');
   return data;
 }
 
@@ -248,10 +248,10 @@ function runAssist(message) {
     });
 
     if (data.ok === false && data.code === 'not_linked') {
-      return { ok: false, notLinked: true, connectUrl: data.connectUrl, error: 'Connect your SuperDocs account to continue.' };
+      return { ok: false, notLinked: true, connectUrl: data.connectUrl, error: 'Connect your MagicPen account to continue.' };
     }
     if (data.ok === false) {
-      return { ok: false, error: data.message || 'SuperDocs could not complete that request.' };
+      return { ok: false, error: data.message || 'MagicPen could not complete that request.' };
     }
 
     stage = 'apply';

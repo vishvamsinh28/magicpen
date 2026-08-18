@@ -1,35 +1,37 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-app-sans), Roboto, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-app-mono), ui-monospace, monospace;
+  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme {
-  /* SuperDocs palette */
-  --color-cream: #faf9f5;        /* app background */
-  --color-parchment: #f0eee6;    /* editor backdrop */
+  /* MagicPen palette — Google Docs chrome: white surfaces, #f9fbfd canvas,
+     Google Blue accents, gray-600 secondary text. */
+  --color-canvas: #f9fbfd;       /* app background */
+  --color-canvas-deep: #eef3fa;  /* editor backdrop */
   --color-paper: #ffffff;
-  --color-ink: #211f1c;
-  --color-ink-soft: #4f4d45;
-  --color-muted: #8b887c;
-  --color-line: #e6e3d8;         /* light borders */
-  --color-frame: #23211d;        /* dark panel frames */
-  --color-accent: #e8684a;
-  --color-accent-deep: #d5583b;
-  --color-accent-soft: #fdf0eb;
-  --color-accent-faint: #fbe3da;
-  --color-accent-disabled: #f2b7a3;
-  --color-good: #2e7d54;
+  --color-ink: #1f1f1f;
+  --color-ink-soft: #444746;
+  --color-muted: #5f6368;
+  --color-line: #e0e3e7;         /* light borders */
+  --color-line-strong: #c4c9d0;  /* stronger borders */
+  --color-accent: #1a73e8;
+  --color-accent-deep: #174ea6;
+  --color-accent-soft: #e8f0fe;
+  --color-accent-faint: #d3e3fd;
+  --color-accent-disabled: #a8c7fa;
+  --color-good: #188038;
 
-  --shadow-card: 0 1px 2px rgba(33, 31, 28, 0.06), 0 8px 24px -12px rgba(33, 31, 28, 0.18);
-  --shadow-pop: 0 4px 6px -2px rgba(33, 31, 28, 0.08), 0 16px 40px -12px rgba(33, 31, 28, 0.25);
+  --shadow-card: 0 1px 2px rgba(60, 64, 67, 0.08), 0 8px 24px -12px rgba(60, 64, 67, 0.16);
+  --shadow-pop: 0 4px 6px -2px rgba(60, 64, 67, 0.08), 0 16px 40px -12px rgba(60, 64, 67, 0.22);
 }
 
 html,
 body {
   min-height: 100%;
-  background: var(--color-cream);
+  background: var(--color-canvas);
   color: var(--color-ink);
   overscroll-behavior: none;
 }
@@ -38,14 +40,14 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #d8d4c8 transparent;
+  scrollbar-color: #dadce0 transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #d8d4c8;
+  background: #dadce0;
   border-radius: 8px;
 }
 *::-webkit-scrollbar-track {
@@ -151,7 +153,7 @@ body {
 }
 
 .doc-editor .tiptap a {
-  color: #1d63d8;
+  color: var(--color-accent);
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
@@ -165,7 +167,7 @@ body {
 }
 
 .doc-editor .tiptap code {
-  background: #f3f1ea;
+  background: #f1f3f4;
   border: 1px solid var(--color-line);
   border-radius: 4px;
   padding: 0.1em 0.35em;
@@ -174,8 +176,8 @@ body {
 }
 
 .doc-editor .tiptap pre {
-  background: #26241f;
-  color: #f5f3ec;
+  background: #202124;
+  color: #e8eaed;
   border-radius: 8px;
   padding: 0.9em 1.1em;
   overflow-x: auto;
@@ -256,7 +258,7 @@ body {
   position: relative;
   height: 1.1em;
   margin: 1.3em -20px;
-  border-top: 2px dashed #d8d4c8;
+  border-top: 2px dashed #dadce0;
   cursor: default;
 }
 .doc-editor .tiptap div[data-page-break]::after {
@@ -267,7 +269,7 @@ body {
   transform: translateX(-50%);
   padding: 0.05em 0.6em;
   border-radius: 999px;
-  background: var(--color-cream);
+  background: var(--color-canvas);
   border: 1px solid var(--color-line);
   font-size: 10.5px;
   font-weight: 600;
@@ -292,23 +294,23 @@ body {
 /* Comment anchors are decorations, not marks — nothing is written into the
    document, so people with comment-only access can still annotate. */
 
-.tiptap .sd-comment-hit {
+.tiptap .mp-comment-hit {
   background: rgba(250, 204, 21, 0.28);
   border-bottom: 2px solid rgba(202, 138, 4, 0.55);
   cursor: pointer;
 }
-.tiptap .sd-comment-hit-active {
+.tiptap .mp-comment-hit-active {
   background: rgba(250, 204, 21, 0.5);
   border-bottom-color: #a16207;
 }
 
 /* ---------------------------- Find & replace ------------------------------ */
 
-.tiptap .sd-search-hit {
+.tiptap .mp-search-hit {
   background: rgba(253, 224, 71, 0.55);
   border-radius: 2px;
 }
-.tiptap .sd-search-hit-active {
+.tiptap .mp-search-hit-active {
   background: rgba(245, 158, 11, 0.5);
   box-shadow: 0 0 0 1.5px #d97706;
 }
@@ -375,13 +377,13 @@ body {
 }
 .doc-editor .tiptap th,
 .doc-editor .tiptap td {
-  border: 1px solid #cfccc0;
+  border: 1px solid #dadce0;
   padding: 6px 10px;
   vertical-align: top;
   position: relative;
 }
 .doc-editor .tiptap th {
-  background: #f5f3ec;
+  background: #f1f3f4;
   font-weight: 600;
   text-align: left;
 }
@@ -389,7 +391,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(232, 104, 74, 0.08);
+  background: rgba(26, 115, 232, 0.08);
   pointer-events: none;
 }
 .doc-editor .tiptap .column-resize-handle {
@@ -412,8 +414,8 @@ body {
 }
 
 /* while the drop-your-document card is shown, the placeholder would double up */
-.sd-hide-placeholder .tiptap p.is-editor-empty:first-child::before,
-.sd-hide-placeholder .tiptap p.is-empty:first-child::before {
+.mp-hide-placeholder .tiptap p.is-editor-empty:first-child::before,
+.mp-hide-placeholder .tiptap p.is-empty:first-child::before {
   content: none;
 }
 
@@ -430,9 +432,9 @@ body {
 .doc-preview h3 { font-size: 1.15em; font-weight: 600; margin: 0.35em 0; }
 .doc-preview p, .doc-preview li { margin: 0.35em 0; }
 .doc-preview ul, .doc-preview ol { padding-left: 1.4em; }
-.doc-preview a { color: #1d63d8; text-decoration: underline; }
+.doc-preview a { color: var(--color-accent); text-decoration: underline; }
 .doc-preview table { border-collapse: collapse; width: 100%; }
-.doc-preview th, .doc-preview td { border: 1px solid #cfccc0; padding: 4px 6px; }
+.doc-preview th, .doc-preview td { border: 1px solid #dadce0; padding: 4px 6px; }
 .doc-preview mark { background: #fef08a; }
 .doc-preview img { max-width: 100%; height: auto; }
 
@@ -448,9 +450,9 @@ body {
 .diff-preview p, .diff-preview li { margin: 0.25em 0; }
 .diff-preview ul { padding-left: 1.3em; list-style: disc; }
 .diff-preview ol { padding-left: 1.3em; list-style: decimal; }
-.diff-preview a { color: #1d63d8; text-decoration: underline; }
+.diff-preview a { color: var(--color-accent); text-decoration: underline; }
 .diff-preview table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
-.diff-preview th, .diff-preview td { border: 1px solid #cfccc0; padding: 3px 5px; }
+.diff-preview th, .diff-preview td { border: 1px solid #dadce0; padding: 3px 5px; }
 .diff-preview mark { background: #fef08a; }
 .diff-preview img { max-width: 100%; height: auto; }
 
@@ -472,10 +474,10 @@ body {
     overflow: visible !important;
     background: #fff !important;
   }
-  body.sd-printing .app-root {
+  body.mp-printing .app-root {
     display: none !important;
   }
-  body.sd-printing .print-sheet {
+  body.mp-printing .print-sheet {
     display: block;
     /* Browsers omit background colors when printing unless "Background
        graphics" is enabled — force them (inherited by every descendant) so
@@ -571,7 +573,7 @@ body {
 
 /* ------------------------------- Animations ------------------------------ */
 
-@keyframes sd-pop-in {
+@keyframes mp-pop-in {
   from {
     opacity: 0;
     transform: translateY(6px) scale(0.98);
@@ -581,13 +583,13 @@ body {
     transform: translateY(0) scale(1);
   }
 }
-.sd-pop-in {
-  animation: sd-pop-in 0.16s ease-out both;
+.mp-pop-in {
+  animation: mp-pop-in 0.16s ease-out both;
 }
 
 /* Landing-page reveals. Scroll-driven where the browser supports it; browsers
    that don't just play it once on load, which lands in the same place. */
-@keyframes sd-reveal {
+@keyframes mp-reveal {
   from {
     opacity: 0;
     transform: translateY(16px);
@@ -597,23 +599,23 @@ body {
     transform: none;
   }
 }
-.sd-reveal {
-  animation: sd-reveal 0.55s ease-out both;
+.mp-reveal {
+  animation: mp-reveal 0.55s ease-out both;
 }
 @supports (animation-timeline: view()) {
-  .sd-reveal {
+  .mp-reveal {
     animation-timeline: view();
     animation-range: entry 5% cover 24%;
     animation-duration: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sd-reveal {
+  .mp-reveal {
     animation: none;
   }
 }
 
-@keyframes sd-slide-in-left {
+@keyframes mp-slide-in-left {
   from {
     transform: translateX(-16px);
     opacity: 0;
@@ -623,11 +625,25 @@ body {
     opacity: 1;
   }
 }
-.sd-slide-in-left {
-  animation: sd-slide-in-left 0.18s ease-out both;
+.mp-slide-in-left {
+  animation: mp-slide-in-left 0.18s ease-out both;
 }
 
-@keyframes sd-bounce {
+@keyframes mp-slide-in-right {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.mp-slide-in-right {
+  animation: mp-slide-in-right 0.18s ease-out both;
+}
+
+@keyframes mp-bounce {
   0%, 80%, 100% {
     transform: translateY(0);
     opacity: 0.45;
@@ -637,6 +653,6 @@ body {
     opacity: 1;
   }
 }
-.sd-dot {
-  animation: sd-bounce 1.2s infinite ease-in-out;
+.mp-dot {
+  animation: mp-bounce 1.2s infinite ease-in-out;
 }

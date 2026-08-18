@@ -7,19 +7,19 @@ function config() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) return null;
-  return { url, key, bucket: process.env.SUPABASE_STORAGE_BUCKET || "superdocs" };
+  return { url, key, bucket: process.env.SUPABASE_STORAGE_BUCKET || "magicpen" };
 }
 
 async function client() {
   const cfg = config();
   if (!cfg) return null;
-  if (!globalThis.__superdocsSupabase) {
+  if (!globalThis.__magicpenSupabase) {
     const { createClient } = await import("@supabase/supabase-js");
-    globalThis.__superdocsSupabase = createClient(cfg.url, cfg.key, {
+    globalThis.__magicpenSupabase = createClient(cfg.url, cfg.key, {
       auth: { persistSession: false },
     });
   }
-  return globalThis.__superdocsSupabase;
+  return globalThis.__magicpenSupabase;
 }
 
 export async function removeStoredFile(path) {
@@ -29,7 +29,7 @@ export async function removeStoredFile(path) {
     const supabase = await client();
     await supabase.storage.from(cfg.bucket).remove([path]);
   } catch (err) {
-    console.warn("[superdocs] Supabase delete skipped:", err.message);
+    console.warn("[magicpen] Supabase delete skipped:", err.message);
   }
 }
 
@@ -48,12 +48,12 @@ export async function uploadOriginalFile({ buffer, path, contentType }) {
       ({ error } = await doUpload());
     }
     if (error) {
-      console.warn("[superdocs] Supabase upload skipped:", error.message);
+      console.warn("[magicpen] Supabase upload skipped:", error.message);
       return null;
     }
     return { bucket: cfg.bucket, path };
   } catch (err) {
-    console.warn("[superdocs] Supabase upload skipped:", err.message);
+    console.warn("[magicpen] Supabase upload skipped:", err.message);
     return null;
   }
 }

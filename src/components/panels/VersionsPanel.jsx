@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  GitCommit, MessageSquare, Loader2, Eye, RotateCcw, MoreHorizontal, Pencil, Trash2, Plus,
+  GitCommit, X, Loader2, Eye, RotateCcw, MoreHorizontal, Pencil, Trash2, Plus,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -44,23 +44,24 @@ export default function VersionsPanel() {
   }, [activeDocId, versionsVersion]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5">
-      <div className="flex shrink-0 items-center justify-between rounded-[5px] border-[1.5px] border-frame bg-paper py-1 pl-3 pr-2">
-        <span className="flex items-center gap-2 py-1.5 text-[13.5px] font-semibold text-ink">
-          <GitCommit size={15} />
-          Commits
+    <div className="flex h-full min-h-0 flex-col bg-paper">
+      <div className="flex shrink-0 items-center justify-between border-b border-line py-2 pl-3 pr-2">
+        <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-ink">
+          <GitCommit size={15} className="shrink-0" />
+          Version history
           {activeDoc && <span className="max-w-32 truncate font-normal text-muted">· {activeDoc.title}</span>}
         </span>
         <button
-          onClick={() => ws.setLeftView("chat")}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-cream"
+          onClick={ws.closePanel}
+          title="Close panel"
+          aria-label="Close panel"
+          className="shrink-0 rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
         >
-          <MessageSquare size={13} />
-          Back to chat
+          <X size={16} />
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto rounded-[5px] border-[1.5px] border-frame bg-paper px-3 py-3.5">
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-3.5">
         {!activeDocId && (
           <p className="px-1 py-2 text-[13px] leading-relaxed text-muted">
             Open a document to see its commits. A commit is a snapshot you save on
@@ -112,7 +113,7 @@ export default function VersionsPanel() {
                 trigger={
                   <button
                     aria-label={`Commit options: ${commitTitle(version)}`}
-                    className="rounded-md p-1 text-muted transition-colors hover:bg-cream hover:text-ink"
+                    className="rounded-md p-1 text-muted transition-colors hover:bg-canvas hover:text-ink"
                   >
                     <MoreHorizontal size={15} />
                   </button>
@@ -128,14 +129,14 @@ export default function VersionsPanel() {
                       ? ws.closeVersionPreview()
                       : ws.openVersionPreview(version)
                   }
-                  className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                  className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
                 >
                   <Eye size={11} />
                   {versionPreview?.id === version.id ? "Close preview" : "Preview"}
                 </button>
                 <button
                   onClick={() => setConfirmRestore(version)}
-                  className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                  className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
                 >
                   <RotateCcw size={11} />
                   Restore

@@ -16,7 +16,7 @@ import {
 // The bot's brain. Interaction model:
 //   • A plain message that isn't in a document thread never creates anything —
 //     it replies with guidance to use commands.
-//   • Documents are created only via `/superdoc new` (which posts a thread) or
+//   • Documents are created only via `/magicpen new` (which posts a thread) or
 //     by uploading a file.
 //   • Everything about a specific document happens inside that document's
 //     thread: reply to edit/ask, or type `commit` / `undo` / `send`.
@@ -96,7 +96,7 @@ async function activeEditorCount(documentId) {
 const section = (text) => ({ type: "section", text: { type: "mrkdwn", text } });
 const context = (text) => ({ type: "context", elements: [{ type: "mrkdwn", text }] });
 // Plain hyperlink (no button element) so nothing depends on Interactivity.
-const openLink = (documentId) => `<${docUrl(documentId)}|Open in SuperDocs>`;
+const openLink = (documentId) => `<${docUrl(documentId)}|Open in MagicPen>`;
 
 const say = (botToken, { channel, threadTs, text, blocks }) =>
   postMessage(botToken, { channel, thread_ts: threadTs, text, blocks, unfurl_links: false });
@@ -112,11 +112,11 @@ async function postToResponseUrl(url, payload) {
 
 function connectPayload(url) {
   return {
-    text: "Connect your SuperDocs account to continue.",
+    text: "Connect your MagicPen account to continue.",
     blocks: [
-      section("👋 *Connect your SuperDocs account* to let me create, edit, and manage your documents from Slack."),
-      section(`<${url}|Connect SuperDocs →>`),
-      context("You only do this once. It links your Slack identity to your SuperDocs account."),
+      section("👋 *Connect your MagicPen account* to let me create, edit, and manage your documents from Slack."),
+      section(`<${url}|Connect MagicPen →>`),
+      context("You only do this once. It links your Slack identity to your MagicPen account."),
     ],
   };
 }
@@ -126,18 +126,18 @@ export async function promptConnect({ botToken, channel, threadTs, teamId, slack
   await say(botToken, { channel, threadTs, ...connectPayload(connectUrl(state)) });
 }
 
-// The full reference shown by `/superdoc help` — every feature, command, and
+// The full reference shown by `/magicpen help` — every feature, command, and
 // in-thread action with examples, so users can discover what's possible.
 function commandsHelp() {
   return {
-    text: "SuperDocs — everything I can do",
+    text: "MagicPen — everything I can do",
     blocks: [
-      section("*SuperDocs — everything I can do* 📄\nI create, edit, version, and manage documents right here in Slack, powered by AI. Everything syncs to your SuperDocs account."),
+      section("*MagicPen — everything I can do* 📄\nI create, edit, version, and manage documents right here in Slack, powered by AI. Everything syncs to your MagicPen account."),
       section(
         "*➕ Create & import*\n" +
-        "• `/superdoc new <name>` — create a document with that name\n" +
-        "       _example:_ `/superdoc new resume`\n" +
-        "• `/superdoc new` — create an untitled doc (I'll name it from your first content)\n" +
+        "• `/magicpen new <name>` — create a document with that name\n" +
+        "       _example:_ `/magicpen new resume`\n" +
+        "• `/magicpen new` — create an untitled doc (I'll name it from your first content)\n" +
         "• *Upload* — drag a `.docx` `.pdf` `.txt` `.rtf` `.md` `.html` file into this chat and I'll import it"
       ),
       section(
@@ -155,18 +155,18 @@ function commandsHelp() {
       ),
       section(
         "*🔎 Find & open*\n" +
-        "• `/superdoc list` — your recent documents\n" +
-        "• `/superdoc open <title>` — open an existing doc as a working thread\n" +
-        "       _example:_ `/superdoc open rent` opens \"Rent Agreement\" _(partial titles are fine)_"
+        "• `/magicpen list` — your recent documents\n" +
+        "• `/magicpen open <title>` — open an existing doc as a working thread\n" +
+        "       _example:_ `/magicpen open rent` opens \"Rent Agreement\" _(partial titles are fine)_"
       ),
       section(
         "*⚙️ Account & cleanup*\n" +
-        "• *Connect* — DM me and tap *Connect SuperDocs* _(one-time)_\n" +
-        "• `/superdoc disconnect` — unlink, to switch accounts\n" +
-        "• `/superdoc clear` — delete all of my messages & files in this chat\n" +
-        "• `/superdoc help` — show this list"
+        "• *Connect* — DM me and tap *Connect MagicPen* _(one-time)_\n" +
+        "• `/magicpen disconnect` — unlink, to switch accounts\n" +
+        "• `/magicpen clear` — delete all of my messages & files in this chat\n" +
+        "• `/magicpen help` — show this list"
       ),
-      context("Tip: plain messages don't create anything — use `/superdoc new` or reply inside a document's thread."),
+      context("Tip: plain messages don't create anything — use `/magicpen new` or reply inside a document's thread."),
     ],
   };
 }
@@ -174,8 +174,8 @@ function commandsHelp() {
 // Short nudge shown when someone messages me outside a document thread.
 function helpBlocks() {
   return [
-    section("👋 I won't turn a plain message into a document. Use `/superdoc new <name>` to create one, or *reply inside a document's thread* to edit it."),
-    context("Type `/superdoc help` to see everything I can do."),
+    section("👋 I won't turn a plain message into a document. Use `/magicpen new <name>` to create one, or *reply inside a document's thread* to edit it."),
+    context("Type `/magicpen help` to see everything I can do."),
   ];
 }
 
@@ -195,7 +195,7 @@ async function deliverFile({ botToken, channel, threadTs, doc, format = "docx", 
     const { body, filename } = await exportDoc({ html, title: doc.title, format: fmt });
     await uploadFileToSlack(botToken, { channel, threadTs, filename, buffer: body, title: doc.title, comment });
   } catch (err) {
-    console.error("[superdocs/slack] file delivery failed:", err);
+    console.error("[magicpen/slack] file delivery failed:", err);
     const scopeHint = err.code === "missing_scope" ? " (the bot needs the *files:write* scope — add it and reinstall)" : "";
     await say(botToken, {
       channel, threadTs,
@@ -279,7 +279,7 @@ async function handleUpload({ user, teamId, channel, threadTs, botToken, file })
     const buffer = await downloadSlackFile(file.url_private_download || file.url_private, botToken);
     parsed = await parseFileToHtml({ buffer, filename: file.name || `upload.${ext}` });
   } catch (err) {
-    console.error("[superdocs/slack] upload parse failed:", err);
+    console.error("[magicpen/slack] upload parse failed:", err);
     await say(botToken, { channel, threadTs, text: `Couldn't read "${file.name}". It may be corrupted or password-protected.` });
     return;
   }
@@ -301,7 +301,7 @@ async function handleUpload({ user, teamId, channel, threadTs, botToken, file })
     channel, threadTs,
     text: `Imported *${parsed.title}*.`,
     blocks: [
-      section(`📄 Imported *${parsed.title}* into SuperDocs.${parsed.notice ? `\n_${parsed.notice}_` : ""}`),
+      section(`📄 Imported *${parsed.title}* into MagicPen.${parsed.notice ? `\n_${parsed.notice}_` : ""}`),
       context('Reply in this thread to edit it — e.g. _"summarize the key points at the top"_. Actions: `:send:` for the file · `:commit:` to snapshot · `:undo:`.'),
       section(openLink(doc.id)),
     ],
@@ -329,7 +329,7 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
 
   // Not inside a document thread → guide to commands. Never auto-create.
   if (!binding?.documentId) {
-    await say(botToken, { channel, threadTs, text: "Use `/superdoc new <name>` to create a document, or reply inside a document's thread to edit it.", blocks: helpBlocks() });
+    await say(botToken, { channel, threadTs, text: "Use `/magicpen new <name>` to create a document, or reply inside a document's thread to edit it.", blocks: helpBlocks() });
     return;
   }
 
@@ -409,7 +409,7 @@ export async function handleMessage({ teamId, channel, slackUserId, text, thread
   }
 }
 
-/* ------------------------- slash: create (/superdoc new) ------------------ */
+/* ------------------------- slash: create (/magicpen new) ------------------ */
 
 // Creates a new, EMPTY document titled exactly what the user typed, posts it as
 // a thread, and binds the thread. Content is added later by replying in the
@@ -440,7 +440,7 @@ export async function createDocFromSlash({ teamId, channel, slackUserId, name, b
     await SlackThreads.bind({ teamId, channelId: channel, threadTs: posted.ts, userId: user.id, documentId: doc.id, chatId: chat.id });
     await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `✅ Created *${title}* — reply in the thread I posted to add content.` });
   } catch (err) {
-    console.error("[superdocs/slack] create post failed:", err);
+    console.error("[magicpen/slack] create post failed:", err);
     await postToResponseUrl(responseUrl, {
       response_type: "ephemeral",
       text: `✅ Created *${title}*, but I couldn't post it here (${err.code || "error"}). ${openLink(doc.id)}`,
@@ -448,7 +448,7 @@ export async function createDocFromSlash({ teamId, channel, slackUserId, name, b
   }
 }
 
-/* ------------------------- slash: open (/superdoc open) ------------------- */
+/* ------------------------- slash: open (/magicpen open) ------------------- */
 
 // Opens an EXISTING document as a working thread: finds it by (forgiving) title
 // match, posts a thread root, binds the thread + a fresh chat, and delivers the
@@ -463,7 +463,7 @@ export async function openDocFromSlash({ teamId, channel, slackUserId, query, bo
 
   const q = deSlackEscape(query).trim();
   if (!q) {
-    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: "Usage: `/superdoc open <title>`" });
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: "Usage: `/magicpen open <title>`" });
     return;
   }
 
@@ -473,7 +473,7 @@ export async function openDocFromSlash({ teamId, channel, slackUserId, query, bo
     (nq && docs.find((d) => normalizeForMatch(d.title) === nq)) ||
     (nq && docs.find((d) => normalizeForMatch(d.title).includes(nq)));
   if (!doc) {
-    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `No document matching *${q}*. Try \`/superdoc list\`.` });
+    await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `No document matching *${q}*. Try \`/magicpen list\`.` });
     return;
   }
 
@@ -493,7 +493,7 @@ export async function openDocFromSlash({ teamId, channel, slackUserId, query, bo
     await deliverFile({ botToken, channel, threadTs: posted.ts, doc, comment: `📎 Here's *${doc.title}*.` });
     await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `✅ Opened *${doc.title}* — reply in the thread I posted to work with it.` });
   } catch (err) {
-    console.error("[superdocs/slack] open post failed:", err);
+    console.error("[magicpen/slack] open post failed:", err);
     await postToResponseUrl(responseUrl, {
       response_type: "ephemeral",
       text: `Found *${doc.title}* but couldn't post it here (${err.code || "error"}). ${openLink(doc.id)}`,
@@ -504,7 +504,7 @@ export async function openDocFromSlash({ teamId, channel, slackUserId, query, bo
 /* ------------------------ slash: clear (background) ----------------------- */
 
 // Deletes the bot's own messages (and files it posted) in the conversation
-// where `/superdoc clear` was run. Slack won't let a user delete a bot's
+// where `/magicpen clear` was run. Slack won't let a user delete a bot's
 // messages, so the bot does it. Only messages authored by THIS bot user are
 // touched — human and other-app messages are left alone.
 export async function clearConversation({ teamId, channel, botToken, responseUrl }) {
@@ -552,7 +552,7 @@ export async function clearConversation({ teamId, channel, botToken, responseUrl
       pages++;
     } while (cursor && pages < 10);
   } catch (err) {
-    console.error("[superdocs/slack] clear: history read failed:", err);
+    console.error("[magicpen/slack] clear: history read failed:", err);
     const hint = err.code === "missing_scope" ? " (the bot needs history access for this conversation)" : "";
     await postToResponseUrl(responseUrl, { response_type: "ephemeral", text: `Couldn't read this conversation${hint}.` });
     return;
@@ -576,7 +576,7 @@ export async function clearConversation({ teamId, channel, botToken, responseUrl
   }
 
   const filePart = deletedFiles ? ` and ${deletedFiles} file${deletedFiles === 1 ? "" : "s"}` : "";
-  const morePart = rateLimited ? " — hit Slack's rate limit, run `/superdoc clear` again for the rest" : "";
+  const morePart = rateLimited ? " — hit Slack's rate limit, run `/magicpen clear` again for the rest" : "";
   await postToResponseUrl(responseUrl, {
     response_type: "ephemeral",
     text: `🧹 Cleared ${deletedMsgs} message${deletedMsgs === 1 ? "" : "s"}${filePart}${morePart}.`,
@@ -585,7 +585,7 @@ export async function clearConversation({ teamId, channel, botToken, responseUrl
 
 /* ------------------------ slash: fast commands ---------------------------- */
 
-// `/superdoc <sub>` for list / open / commit / help. Returns a payload the route
+// `/magicpen <sub>` for list / open / commit / help. Returns a payload the route
 // sends as an ephemeral reply. (`new` is handled by createDocFromSlash.)
 export async function handleSlashCommand({ teamId, slackUserId, text }) {
   const parts = String(text || "").trim().split(/\s+/);
@@ -600,10 +600,10 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
   if (sub === "disconnect") {
     const existing = await SlackLinks.get(teamId, slackUserId);
     if (!existing) {
-      return { text: "Not connected.", blocks: [section("You're not connected to a SuperDocs account. DM me to connect one.")] };
+      return { text: "Not connected.", blocks: [section("You're not connected to a MagicPen account. DM me to connect one.")] };
     }
     await SlackLinks.unlink(teamId, slackUserId);
-    return { text: "Disconnected.", blocks: [section("✅ Disconnected from SuperDocs. DM me *hi* to connect a different account.")] };
+    return { text: "Disconnected.", blocks: [section("✅ Disconnected from MagicPen. DM me *hi* to connect a different account.")] };
   }
 
   const user = await resolveUser(teamId, slackUserId);
@@ -614,7 +614,7 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
 
   if (sub === "list") {
     const docs = (await Documents.list(user.id)).slice(0, 25);
-    if (!docs.length) return { text: "No documents yet.", blocks: [section("You don't have any documents yet. Try `/superdoc new <name>`.")] };
+    if (!docs.length) return { text: "No documents yet.", blocks: [section("You don't have any documents yet. Try `/magicpen new <name>`.")] };
     return {
       text: "Your recent documents",
       blocks: [
@@ -626,14 +626,14 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
 
   if (sub === "open") {
     const query = deSlackEscape(arg).trim();
-    if (!query) return { text: "Usage", blocks: [section("Usage: `/superdoc open <title>`")] };
+    if (!query) return { text: "Usage", blocks: [section("Usage: `/magicpen open <title>`")] };
     const docs = await Documents.list(user.id);
     const nq = normalizeForMatch(query);
     // Prefer an exact (normalized) title, else the first that contains the query.
     const match =
       (nq && docs.find((d) => normalizeForMatch(d.title) === nq)) ||
       (nq && docs.find((d) => normalizeForMatch(d.title).includes(nq)));
-    if (!match) return { text: "No match.", blocks: [section(`No document matching *${query}*. Try \`/superdoc list\`.`)] };
+    if (!match) return { text: "No match.", blocks: [section(`No document matching *${query}*. Try \`/magicpen list\`.`)] };
     return { text: match.title, blocks: [section(`*${match.title}* — ${openLink(match.id)}`)] };
   }
 
@@ -650,8 +650,8 @@ export async function handleSlashCommand({ teamId, slackUserId, text }) {
   if (sub === "new") {
     // Handled asynchronously by the route via createDocFromSlash; if it lands
     // here it means the route didn't special-case it.
-    return { text: "Use /superdoc new <name>", blocks: [section("Usage: `/superdoc new <name>`")] };
+    return { text: "Use /magicpen new <name>", blocks: [section("Usage: `/magicpen new <name>`")] };
   }
 
-  return { text: "Unknown command", blocks: [section(`Unknown command \`${sub}\`. Try \`/superdoc help\`.`)] };
+  return { text: "Unknown command", blocks: [section(`Unknown command \`${sub}\`. Try \`/magicpen help\`.`)] };
 }

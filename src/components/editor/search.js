@@ -68,7 +68,7 @@ export const SearchHighlight = Extension.create({
             if (meta) {
               const decos = meta.matches.map((m, i) =>
                 Decoration.inline(m.from, m.to, {
-                  class: i === meta.activeIndex ? "sd-search-hit sd-search-hit-active" : "sd-search-hit",
+                  class: i === meta.activeIndex ? "mp-search-hit mp-search-hit-active" : "mp-search-hit",
                 })
               );
               return DecorationSet.create(tr.doc, decos);

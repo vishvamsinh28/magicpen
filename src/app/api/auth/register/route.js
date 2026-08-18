@@ -32,7 +32,7 @@ export async function POST(request) {
     });
   } catch (err) {
     // Unique-index race on the email column.
-    console.error("[superdocs] register failed:", err);
+    console.error("[magicpen] register failed:", err);
     return Response.json(
       { error: { message: "An account with this email already exists — try signing in" } },
       { status: 409 }

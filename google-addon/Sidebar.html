@@ -5,8 +5,8 @@
     <meta charset="utf-8" />
     <style>
       :root {
-        --ink: #1f1e1b; --muted: #8a8880; --line: #e6e4df; --bg: #f7f7f5;
-        --blue: #1d63d8; --blue-ink: #fff; --card: #fff;
+        --ink: #1f1f1f; --muted: #5f6368; --line: #dadce0; --bg: #f9fbfd;
+        --accent: #1a73e8; --accent-ink: #fff; --card: #fff;
       }
       * { box-sizing: border-box; }
       body {
@@ -18,7 +18,7 @@
       .sub { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
       .scope {
         display: inline-block; font-size: 11px; color: var(--muted);
-        background: #efeee9; border: 1px solid var(--line);
+        background: #e8f0fe; border: 1px solid var(--line);
         border-radius: 999px; padding: 2px 9px; margin-bottom: 10px;
       }
       textarea {
@@ -27,12 +27,12 @@
         background: var(--card);
       }
       button {
-        margin-top: 8px; width: 100%; background: var(--blue); color: var(--blue-ink);
+        margin-top: 8px; width: 100%; background: var(--accent); color: var(--accent-ink);
         border: 0; border-radius: 9px; padding: 10px 14px; font-size: 14px;
         font-weight: 600; cursor: pointer;
       }
       button:disabled { opacity: .55; cursor: default; }
-      button.secondary { background: #efeee9; color: var(--ink); border: 1px solid var(--line); }
+      button.secondary { background: #e8f0fe; color: var(--ink); border: 1px solid var(--line); }
       .status { margin-top: 12px; font-size: 12px; line-height: 1.5; }
       .status.err { color: #b3261e; }
       .status.ok { color: #1f7a34; }
@@ -44,27 +44,27 @@
       .reply .summary { color: var(--muted); font-size: 11px; margin-top: 6px; }
       .banner {
         margin: 0 0 12px; padding: 10px; border-radius: 9px;
-        background: #eef3fd; border: 1px solid #cfe0fb; line-height: 1.45;
+        background: #e8f0fe; border: 1px solid #d3e3fd; line-height: 1.45;
       }
-      .banner a { color: var(--blue); font-weight: 600; }
+      .banner a { color: var(--accent); font-weight: 600; }
       .hint { color: var(--muted); font-size: 11px; margin-top: 10px; line-height: 1.45; }
       .spinner { display: none; }
       .busy .spinner { display: inline; }
       .examples { margin-top: 10px; }
       .examples button {
         width: auto; display: inline-block; margin: 3px 4px 0 0; padding: 5px 9px;
-        font-size: 11px; font-weight: 500; background: #efeee9; color: var(--ink);
+        font-size: 11px; font-weight: 500; background: #e8f0fe; color: var(--ink);
         border: 1px solid var(--line);
       }
     </style>
   </head>
   <body>
-    <h1>SuperDocs</h1>
+    <h1>MagicPen</h1>
     <p class="sub">Edit this doc with AI.</p>
 
     <div id="connectBanner" class="banner" style="display:none">
-      Connect your SuperDocs account to start editing.
-      <a id="connectLink" href="#" target="_blank" rel="noopener">Connect SuperDocs →</a>
+      Connect your MagicPen account to start editing.
+      <a id="connectLink" href="#" target="_blank" rel="noopener">Connect MagicPen →</a>
     </div>
 
     <div id="scope" class="scope">Target: whole document</div>

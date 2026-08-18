@@ -1,7 +1,7 @@
 import { verifyAddonSecret } from "@/lib/gdocs";
 import { connectUrlForGoogleUser } from "@/lib/gdocs-actions";
 
-// Hands the add-on a fresh connect link for an explicit "Connect SuperDocs"
+// Hands the add-on a fresh connect link for an explicit "Connect MagicPen"
 // button in the sidebar. (The assist endpoint also returns a connectUrl when it
 // finds the user unlinked, so this is only needed for the up-front button.)
 // Auth is the shared add-on secret.
@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 const json = (body, status = 200) => Response.json(body, { status });
 
 export async function POST(request) {
-  if (!verifyAddonSecret(request.headers.get("x-superdocs-addon"))) {
+  const addonSecret = request.headers.get("x-magicpen-addon");
+  if (!verifyAddonSecret(addonSecret)) {
     return json({ ok: false, code: "unauthorized" }, 401);
   }
 

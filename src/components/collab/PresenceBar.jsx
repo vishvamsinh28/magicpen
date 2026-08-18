@@ -24,13 +24,13 @@ export default function PresenceBar({ peers = [], selfId = null, max = 4 }) {
           key={p.id}
           title={`${p.name}${ROLE_LABEL[p.role] ? ` · ${ROLE_LABEL[p.role]}` : ""}`}
           className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-paper"
-          style={{ background: p.color || "#8b887c" }}
+          style={{ background: p.color || "#7b8b9b" }}
         >
           {initials(p.name)}
         </span>
       ))}
       {extra > 0 && (
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cream text-[10px] font-bold text-ink-soft ring-2 ring-paper">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-canvas text-[10px] font-bold text-ink-soft ring-2 ring-paper">
           +{extra}
         </span>
       )}

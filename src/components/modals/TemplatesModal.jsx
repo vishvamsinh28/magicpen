@@ -1,19 +1,20 @@
 "use client";
 
 import {
-  ShieldCheck, Home, Mail, ClipboardList, Rocket, Receipt, UserRound, FileText,
+  NotebookPen, Activity, Package, Megaphone, Handshake, Receipt, Briefcase, UserRound, FileText,
 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import Modal from "@/components/ui/Modal";
 import { TEMPLATES } from "@/lib/templates";
 
 const ICONS = {
-  shield: ShieldCheck,
-  home: Home,
-  mail: Mail,
-  clipboard: ClipboardList,
-  rocket: Rocket,
+  notebook: NotebookPen,
+  activity: Activity,
+  package: Package,
+  megaphone: Megaphone,
+  handshake: Handshake,
   receipt: Receipt,
+  briefcase: Briefcase,
   user: UserRound,
 };
 
@@ -28,7 +29,7 @@ export default function TemplatesModal() {
         </h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
           Start from a ready-made document and let the assistant fill in the details — try
-          &quot;fill this NDA for a partnership between Acme and Beta Corp&quot;.
+          &quot;fill this invoice for two weeks of design work for Acme Studio&quot;.
         </p>
 
         <div className="mt-8 grid grid-cols-1 gap-4 pb-16 sm:grid-cols-2 md:grid-cols-3">

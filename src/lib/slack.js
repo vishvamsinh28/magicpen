@@ -197,12 +197,12 @@ export async function exchangeInstallCode(code) {
 // present when Slack is configured), so no extra secret to manage.
 
 const stateSecret = () =>
-  new TextEncoder().encode(process.env.SLACK_SIGNING_SECRET || "superdocs-slack-dev");
+  new TextEncoder().encode(process.env.SLACK_SIGNING_SECRET || "magicpen-slack-dev");
 
 export async function signConnectState({ teamId, slackUserId }) {
   return new SignJWT({ teamId, slackUserId, kind: "slack_connect" })
     .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("superdocs")
+    .setIssuer("magicpen")
     .setIssuedAt()
     .setExpirationTime("15m")
     .sign(stateSecret());
@@ -210,7 +210,7 @@ export async function signConnectState({ teamId, slackUserId }) {
 
 export async function verifyConnectState(token) {
   try {
-    const { payload } = await jwtVerify(token, stateSecret(), { issuer: "superdocs" });
+    const { payload } = await jwtVerify(token, stateSecret(), { issuer: "magicpen" });
     if (payload.kind !== "slack_connect" || !payload.teamId || !payload.slackUserId) return null;
     return { teamId: payload.teamId, slackUserId: payload.slackUserId };
   } catch {

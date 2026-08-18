@@ -42,11 +42,11 @@ function ShareRow({ share, onChange, onRevoke }) {
           readOnly
           value={url}
           onFocus={(e) => e.target.select()}
-          className="min-w-0 flex-1 rounded-md border border-line bg-cream px-2 py-1.5 text-[12px] text-ink-soft outline-none"
+          className="min-w-0 flex-1 rounded-md border border-line bg-canvas px-2 py-1.5 text-[12px] text-ink-soft outline-none"
         />
         <button
           onClick={copy}
-          className="flex shrink-0 items-center gap-1.5 rounded-md border-[1.5px] border-frame bg-paper px-2.5 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-cream"
+          className="flex shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-paper px-2.5 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
         >
           {copied ? <Check size={13} className="text-good" /> : <Copy size={13} />}
           {copied ? "Copied" : "Copy"}
@@ -63,7 +63,7 @@ function ShareRow({ share, onChange, onRevoke }) {
             onSelect: () => onChange({ role: key }),
           }))}
           trigger={
-            <button className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] font-medium text-ink-soft transition-colors hover:bg-cream">
+            <button className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] font-medium text-ink-soft transition-colors hover:bg-canvas">
               {ROLE_META[share.role]?.icon}
               {ROLE_META[share.role]?.label || share.role}
             </button>
@@ -76,7 +76,7 @@ function ShareRow({ share, onChange, onRevoke }) {
           className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px] font-medium transition-colors ${
             share.allowDownload
               ? "border-accent-faint bg-accent-soft text-accent-deep"
-              : "border-line text-muted hover:bg-cream"
+              : "border-line text-muted hover:bg-canvas"
           }`}
         >
           <Download size={13} />
@@ -179,7 +179,7 @@ export default function ShareModal() {
         </p>
 
         {activeDocId && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line bg-cream p-3">
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line bg-canvas p-3">
             <span className="text-[13px] font-medium text-ink">Create a link that lets people</span>
             <Dropdown
               items={Object.entries(ROLE_META).map(([key, meta]) => ({
@@ -190,7 +190,7 @@ export default function ShareModal() {
                 onSelect: () => setNewRole(key),
               }))}
               trigger={
-                <button className="flex items-center gap-1.5 rounded-md border-[1.5px] border-frame bg-paper px-2.5 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-cream">
+                <button className="flex items-center gap-1.5 rounded-md border border-line-strong bg-paper px-2.5 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas">
                   {ROLE_META[newRole].icon}
                   {ROLE_META[newRole].label}
                 </button>

@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { readVerified } from "@/lib/slack";
 import { handleSlashCommand, createDocFromSlash, openDocFromSlash, clearConversation, botTokenForTeam } from "@/lib/slack-actions";
 
-// Slash command webhook for `/superdoc …`. Fast, DB-only subcommands answer
+// Slash command webhook for `/magicpen …`. Fast, DB-only subcommands answer
 // inline. `new` runs the AI and posts a document thread, so it acks immediately
 // and does its work in after() (staying inside Slack's 3s ack window).
 
@@ -39,7 +39,7 @@ export async function POST(request) {
         if (!botToken) { await notInstalled(); return; }
         await createDocFromSlash({ teamId, channel, slackUserId, name, botToken, responseUrl });
       } catch (err) {
-        console.error("[superdocs/slack] slash 'new' failed:", err);
+        console.error("[magicpen/slack] slash 'new' failed:", err);
       }
     });
     return ephemeral({ text: "📄 Creating your document…" });
@@ -54,7 +54,7 @@ export async function POST(request) {
         if (!botToken) { await notInstalled(); return; }
         await openDocFromSlash({ teamId, channel, slackUserId, query, botToken, responseUrl });
       } catch (err) {
-        console.error("[superdocs/slack] slash 'open' failed:", err);
+        console.error("[magicpen/slack] slash 'open' failed:", err);
       }
     });
     return ephemeral({ text: "📂 Opening…" });
@@ -68,7 +68,7 @@ export async function POST(request) {
         if (!botToken) { await notInstalled(); return; }
         await clearConversation({ teamId, channel, botToken, responseUrl });
       } catch (err) {
-        console.error("[superdocs/slack] slash 'clear' failed:", err);
+        console.error("[magicpen/slack] slash 'clear' failed:", err);
       }
     });
     return ephemeral({ text: "🧹 Clearing my messages…" });
@@ -79,7 +79,7 @@ export async function POST(request) {
     const result = await handleSlashCommand({ teamId, slackUserId, text });
     return ephemeral(result);
   } catch (err) {
-    console.error("[superdocs/slack] slash command failed:", err);
+    console.error("[magicpen/slack] slash command failed:", err);
     return ephemeral({ text: "Something went wrong running that command." });
   }
 }

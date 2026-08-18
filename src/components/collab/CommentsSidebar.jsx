@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquarePlus, Check, Trash2, Loader2, CornerDownRight, MessageSquare } from "lucide-react";
+import { MessageSquarePlus, Check, Trash2, Loader2, CornerDownRight, MessageSquare, X } from "lucide-react";
 import { apiFetch, timeAgo } from "@/lib/client-utils";
 import { docTextIndex, offsetOfPos, findQuoteRange, setCommentState } from "@/components/editor/comments";
 
@@ -18,7 +18,7 @@ function Avatar({ name, color }) {
   return (
     <span
       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-      style={{ background: color || "#8b887c" }}
+      style={{ background: color || "#7b8b9b" }}
     >
       {initials(name)}
     </span>
@@ -109,8 +109,8 @@ export default function CommentsSidebar({
     const dom = editor.view?.dom;
     if (!dom) return;
     const onClick = (e) => setActiveId(e.detail);
-    dom.addEventListener("sd-comment-click", onClick);
-    return () => dom.removeEventListener("sd-comment-click", onClick);
+    dom.addEventListener("mp-comment-click", onClick);
+    return () => dom.removeEventListener("mp-comment-click", onClick);
   }, [editor]);
 
   // Track the live selection so "Comment on selection" knows what to quote.
@@ -202,9 +202,9 @@ export default function CommentsSidebar({
   const canComment = role === "owner" || role === "edit" || role === "comment";
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5">
-      <div className="flex shrink-0 items-center justify-between rounded-[5px] border-[1.5px] border-frame bg-paper py-1 pl-3 pr-2">
-        <span className="flex items-center gap-2 py-1.5 text-[13.5px] font-semibold text-ink">
+    <div className="flex h-full min-h-0 flex-col bg-paper">
+      <div className="flex shrink-0 items-center justify-between border-b border-line py-2 pl-3 pr-2">
+        <span className="flex items-center gap-2 text-[13.5px] font-semibold text-ink">
           <MessageSquare size={15} />
           Comments
           {visible.length > 0 && <span className="font-normal text-muted">· {visible.length}</span>}
@@ -212,8 +212,9 @@ export default function CommentsSidebar({
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowResolved((v) => !v)}
+            aria-pressed={showResolved}
             className={`rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${
-              showResolved ? "bg-accent-soft text-accent-deep" : "text-ink-soft hover:bg-cream"
+              showResolved ? "bg-accent-soft text-accent-deep" : "text-ink-soft hover:bg-canvas"
             }`}
           >
             Resolved
@@ -221,9 +222,11 @@ export default function CommentsSidebar({
           {onClose && (
             <button
               onClick={onClose}
-              className="rounded-md px-2 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-cream"
+              title="Close panel"
+              aria-label="Close panel"
+              className="rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
             >
-              Close
+              <X size={16} />
             </button>
           )}
         </div>
@@ -231,7 +234,7 @@ export default function CommentsSidebar({
 
       <div
         ref={listRef}
-        className="min-h-0 flex-1 space-y-2.5 overflow-y-auto rounded-[5px] border-[1.5px] border-frame bg-paper px-3 py-3.5"
+        className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-3.5"
       >
         {loading && (
           <p className="flex items-center gap-2 px-1 py-2 text-[13px] text-muted">
@@ -307,7 +310,7 @@ export default function CommentsSidebar({
                 <button
                   onClick={() => patchComment(thread.root.id, { resolved: true })}
                   title="Resolve thread"
-                  className="flex shrink-0 items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                  className="flex shrink-0 items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
                 >
                   <Check size={12} />
                   Resolve
@@ -324,7 +327,7 @@ export default function CommentsSidebar({
                 {canComment && (
                   <button
                     onClick={() => patchComment(thread.root.id, { resolved: false })}
-                    className="rounded-md px-1.5 py-0.5 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                    className="rounded-md px-1.5 py-0.5 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
                   >
                     Reopen
                   </button>
@@ -336,7 +339,7 @@ export default function CommentsSidebar({
       </div>
 
       {canComment && (
-        <div className="shrink-0 rounded-[5px] border-[1.5px] border-frame bg-paper p-2.5">
+        <div className="shrink-0 border-t border-line bg-paper p-2.5">
           {selection ? (
             <p className="mb-1.5 truncate text-[11.5px] italic text-muted">
               On “{selection.quote.slice(0, 60)}

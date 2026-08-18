@@ -5,7 +5,7 @@ import { resolveUserByGoogleId, connectUrlForGoogleUser, assistOnDoc } from "@/l
 // HTML + a natural-language instruction; we run the assistant and return the new
 // HTML for the add-on to write back. Auth is the shared add-on secret (there's
 // no Slack-style request signature here — the add-on is a first-party client we
-// control). If the Google user hasn't linked a SuperDocs account, we return a
+// control). If the Google user hasn't linked a MagicPen account, we return a
 // `not_linked` result carrying a connect URL the sidebar shows instead.
 
 export const runtime = "nodejs";
@@ -23,7 +23,8 @@ function aiErrorMessage(err) {
 }
 
 export async function POST(request) {
-  if (!verifyAddonSecret(request.headers.get("x-superdocs-addon"))) {
+  const addonSecret = request.headers.get("x-magicpen-addon");
+  if (!verifyAddonSecret(addonSecret)) {
     return json({ ok: false, code: "unauthorized" }, 401);
   }
 
@@ -56,7 +57,7 @@ export async function POST(request) {
     });
     return json({ ok: true, ...result });
   } catch (err) {
-    console.error("[superdocs/gdocs] assist failed:", err);
+    console.error("[magicpen/gdocs] assist failed:", err);
     return json({ ok: false, code: err.code || "ai_error", message: aiErrorMessage(err) });
   }
 }

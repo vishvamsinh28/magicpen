@@ -41,16 +41,45 @@ export function WorkspaceProvider({ user, children }) {
 
   /* --------------------------------- ui ---------------------------------- */
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const [leftView, setLeftView] = useState("chat"); // 'chat' | 'changes'
-  const [mobilePane, setMobilePane] = useState("chat"); // 'chat' | 'editor'
-  const [navOpen, setNavOpen] = useState(false);
+  // The collapsible side panel next to the document. null = closed (canvas
+  // takes the full width); otherwise which view the panel is showing.
+  const [panel, setPanel] = useState("chat"); // null | 'chat' | 'comments' | 'versions' | 'changes'
+  const [mobilePane, setMobilePane] = useState("chat"); // 'chat' (panel) | 'editor'
+
   const [filesOpen, setFilesOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [infoModal, setInfoModal] = useState(null); // 'upgrade'|'getstarted'|'docs'|'bug'|'settings'|'profile'
   const [toast, setToast] = useState(null);
   const [changesVersion, setChangesVersion] = useState(0);
   const [printHtml, setPrintHtml] = useState(null); // non-null while printing
+  // Autosave lifecycle for the header's save-state indicator.
+  const [saveState, setSaveState] = useState("idle"); // 'idle'|'pending'|'saving'|'saved'|'error'
+  // In-document find & replace, owned here so the Edit menu, the toolbar and
+  // Ctrl+F all drive the same panel inside EditorPane.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findNonce, setFindNonce] = useState(0); // bump to re-focus the find input
+
+  const openFind = () => {
+    setFindOpen(true);
+    setFindNonce((n) => n + 1);
+  };
+  const toggleFind = () => {
+    setFindOpen((o) => !o);
+    setFindNonce((n) => n + 1);
+  };
+  const closeFind = () => setFindOpen(false);
+
+  // Opening a view also surfaces the panel pane on mobile; closing hands the
+  // screen back to the document.
+  const openPanel = (view) => {
+    setPanel(view);
+    setMobilePane("chat");
+  };
+  const closePanel = () => {
+    setPanel(null);
+    setMobilePane("editor");
+  };
+  const togglePanel = (view) => (panel === view ? closePanel() : openPanel(view));
 
   /* ----------------------------- collaboration ----------------------------- */
   const [shareOpen, setShareOpen] = useState(false);
@@ -77,12 +106,12 @@ export function WorkspaceProvider({ user, children }) {
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("superdocs-settings") || "null");
+      const saved = JSON.parse(localStorage.getItem("magicpen-settings") || "null");
       if (saved) setSettings({ ...DEFAULT_SETTINGS, ...saved });
     } catch {}
     // Restore this user's previously open tabs.
     (async () => {
-      // Deep link (e.g. the Slack bot's "Open in SuperDocs" → /app?doc=<id>).
+      // Deep link (e.g. the Slack bot's "Open in MagicPen" → /app?doc=<id>).
       const deepLinkId = new URLSearchParams(window.location.search).get("doc");
       if (deepLinkId) {
         const p = new URLSearchParams(window.location.search);
@@ -91,9 +120,7 @@ export function WorkspaceProvider({ user, children }) {
         window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
       }
       try {
-        const tabs = JSON.parse(
-          localStorage.getItem(`superdocs-tabs:${user.id}`) || "null"
-        );
+        const tabs = JSON.parse(localStorage.getItem(`magicpen-tabs:${user.id}`) || "null");
         const restoreIds = tabs?.ids?.length ? tabs.ids.slice(0, 8) : [];
         const restored = [];
         for (const id of restoreIds) {
@@ -122,7 +149,7 @@ export function WorkspaceProvider({ user, children }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem("superdocs-settings", JSON.stringify(settings));
+      localStorage.setItem("magicpen-settings", JSON.stringify(settings));
     } catch {}
   }, [settings]);
 
@@ -130,7 +157,7 @@ export function WorkspaceProvider({ user, children }) {
     if (!user) return;
     try {
       localStorage.setItem(
-        `superdocs-tabs:${user.id}`,
+        `magicpen-tabs:${user.id}`,
         JSON.stringify({ ids: openDocs.map((d) => d.id), activeId: activeDocId })
       );
     } catch {}
@@ -156,6 +183,7 @@ export function WorkspaceProvider({ user, children }) {
   const scheduleSave = (docId) => {
     const timers = saveTimersRef.current;
     clearTimeout(timers.get(docId));
+    setSaveState("pending");
     timers.set(
       docId,
       setTimeout(async () => {
@@ -163,11 +191,15 @@ export function WorkspaceProvider({ user, children }) {
         const html = docHtmlRef.current.get(docId);
         if (html == null) return;
         try {
+          setSaveState("saving");
           await apiFetch(`/api/documents/${docId}`, {
             method: "PATCH",
             body: JSON.stringify({ contentHtml: html }),
           });
+          // Another edit may already be waiting — don't claim "saved" over it.
+          setSaveState(timers.size ? "pending" : "saved");
         } catch (e) {
+          setSaveState("error");
           showToast(`Autosave failed: ${e.message}`);
         }
       }, 900)
@@ -541,8 +573,7 @@ export function WorkspaceProvider({ user, children }) {
     setChatTitle(null);
     setMessages([]);
     setPendingChange(null);
-    setLeftView("chat");
-    setMobilePane("chat");
+    openPanel("chat");
   };
 
   const loadChat = async (id) => {
@@ -553,9 +584,7 @@ export function WorkspaceProvider({ user, children }) {
       setScope(chat.scope || "document");
       setMessages(msgs.map((m) => ({ ...m, appliedStatus: m.edits?.length ? "applied" : null })));
       setPendingChange(null);
-      setLeftView("chat");
-      setHistoryOpen(false);
-      setMobilePane("chat");
+      openPanel("chat");
       if (chat.documentId && chat.documentId !== activeDocId) {
         openDocument(chat.documentId).catch(() => {});
       }
@@ -755,11 +784,15 @@ export function WorkspaceProvider({ user, children }) {
     restoreVersion, renameVersion, deleteVersion,
     // export & print
     downloadDocument, printHtml, setPrintHtml,
+    // autosave indicator
+    saveState,
+    // find & replace
+    findOpen, findNonce, openFind, toggleFind, closeFind,
     // settings & ui
     settings, setSettings,
-    leftView, setLeftView, mobilePane, setMobilePane,
-    navOpen, setNavOpen, filesOpen, setFilesOpen, templatesOpen, setTemplatesOpen,
-    historyOpen, setHistoryOpen, infoModal, setInfoModal,
+    panel, openPanel, closePanel, togglePanel, mobilePane, setMobilePane,
+    filesOpen, setFilesOpen, templatesOpen, setTemplatesOpen,
+    infoModal, setInfoModal,
     toast, showToast,
   };
 

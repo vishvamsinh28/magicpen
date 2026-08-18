@@ -20,11 +20,11 @@ const EMPTY = {
 /* ------------------------------ Mongo store ------------------------------ */
 
 function mongoStore(uri) {
-  const dbName = process.env.MONGODB_DB || "superdocs";
+  const dbName = process.env.MONGODB_DB || "magicpen";
 
   async function db() {
-    if (!globalThis.__superdocsMongo) {
-      globalThis.__superdocsMongo = (async () => {
+    if (!globalThis.__magicpenMongo) {
+      globalThis.__magicpenMongo = (async () => {
         const { MongoClient } = await import("mongodb");
         const client = new MongoClient(uri);
         await client.connect();
@@ -50,7 +50,7 @@ function mongoStore(uri) {
         return d;
       })();
     }
-    return globalThis.__superdocsMongo;
+    return globalThis.__magicpenMongo;
   }
 
   const toMongo = (query) => {
@@ -148,23 +148,23 @@ function mongoStore(uri) {
 
 function fileStore() {
   const dir = path.join(process.cwd(), ".data");
-  const file = path.join(dir, "superdocs.json");
+  const file = path.join(dir, "magicpen.json");
 
   async function load() {
-    if (!globalThis.__superdocsFileData) {
-      globalThis.__superdocsFileData = (async () => {
+    if (!globalThis.__magicpenFileData) {
+      globalThis.__magicpenFileData = (async () => {
         try {
           const data = JSON.parse(await fs.readFile(file, "utf8"));
           return { ...structuredClone(EMPTY), ...data };
         } catch {
           console.warn(
-            "[superdocs] MONGODB_URI not set — using local JSON store at .data/superdocs.json"
+            "[magicpen] MONGODB_URI not set — using local JSON store at .data/magicpen.json"
           );
           return structuredClone(EMPTY);
         }
       })();
     }
-    return globalThis.__superdocsFileData;
+    return globalThis.__magicpenFileData;
   }
 
   let queue = Promise.resolve();
@@ -176,7 +176,7 @@ function fileStore() {
         await fs.writeFile(tmp, JSON.stringify(data));
         await fs.rename(tmp, file);
       })
-      .catch((e) => console.error("[superdocs] failed to persist store:", e));
+      .catch((e) => console.error("[magicpen] failed to persist store:", e));
     return queue;
   }
 
@@ -254,11 +254,11 @@ function fileStore() {
 }
 
 function store() {
-  if (!globalThis.__superdocsStore) {
+  if (!globalThis.__magicpenStore) {
     const uri = process.env.MONGODB_URI;
-    globalThis.__superdocsStore = uri ? mongoStore(uri) : fileStore();
+    globalThis.__magicpenStore = uri ? mongoStore(uri) : fileStore();
   }
-  return globalThis.__superdocsStore;
+  return globalThis.__magicpenStore;
 }
 
 /* --------------------------------- Users ---------------------------------- */
@@ -525,8 +525,8 @@ export const SlackInstalls = {
 };
 
 /* ------------------------------- Slack links ------------------------------ */
-// Maps a Slack identity (team + user) to a SuperDocs account so the bot can act
-// as that user. Written by the browser connect flow, which proves the SuperDocs
+// Maps a Slack identity (team + user) to a MagicPen account so the bot can act
+// as that user. Written by the browser connect flow, which proves the MagicPen
 // session before linking. Keyed (and uniquely indexed) on (teamId, slackUserId).
 
 export const SlackLinks = {
@@ -537,9 +537,9 @@ export const SlackLinks = {
 };
 
 /* ------------------------------ Google links ------------------------------ */
-// Maps a Google identity (the add-on user's email) to a SuperDocs account so
+// Maps a Google identity (the add-on user's email) to a MagicPen account so
 // the Docs add-on can act as that user. Written by the browser connect flow,
-// which proves the SuperDocs session before linking — the same pattern as
+// which proves the MagicPen session before linking — the same pattern as
 // SlackLinks. Keyed (and uniquely indexed) on googleUserId.
 
 export const GoogleLinks = {
@@ -550,7 +550,7 @@ export const GoogleLinks = {
 };
 
 /* ------------------------------ Slack threads ----------------------------- */
-// Binds a Slack conversation thread to a SuperDocs document + chat so follow-up
+// Binds a Slack conversation thread to a MagicPen document + chat so follow-up
 // messages in the same thread keep operating on the same document. Keyed (and
 // uniquely indexed) on (teamId, channelId, threadTs).
 

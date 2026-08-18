@@ -38,17 +38,17 @@ export default function ConfirmDialog({
   if (!open) return null;
 
   // Portal to <body>: hosts like the files modal keep a persistent CSS
-  // transform (sd-pop-in fill-mode "both"), which would re-anchor our
+  // transform (mp-pop-in fill-mode "both"), which would re-anchor our
   // fixed-position overlay to the scrolled container instead of the viewport.
   return createPortal(
     <div
-      className="sd-pop-in fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className="mp-pop-in fixed inset-0 z-[100] flex items-center justify-center p-4"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
     >
       <div className="absolute inset-0 bg-ink/40" onClick={busy ? undefined : onCancel} />
-      <div className="relative w-full max-w-sm rounded-xl border border-frame bg-paper p-5 shadow-pop">
+      <div className="relative w-full max-w-sm rounded-xl border border-line bg-paper p-5 shadow-pop">
         <p id="confirm-dialog-title" className="break-words text-[16px] font-bold text-ink">
           {title}
         </p>
@@ -58,7 +58,7 @@ export default function ConfirmDialog({
             ref={cancelRef}
             disabled={busy}
             onClick={onCancel}
-            className="rounded-lg border-[1.5px] border-frame bg-paper px-3.5 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-cream disabled:opacity-50"
+            className="rounded-lg border border-line-strong bg-paper px-3.5 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-canvas disabled:opacity-50"
           >
             Cancel
           </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { History, MessageSquare, RotateCcw, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { History, X, RotateCcw, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import DiffList from "@/components/DiffView";
@@ -10,7 +10,7 @@ import { buildDiffItems } from "@/lib/diff";
 
 const STATUS_STYLES = {
   applied: "bg-[#e8f3ec] text-good",
-  rejected: "bg-cream text-muted",
+  rejected: "bg-canvas text-muted",
   restored: "bg-accent-soft text-accent-deep",
   pending: "bg-amber-50 text-amber-700",
 };
@@ -53,23 +53,24 @@ export default function ChangesPanel() {
   }, [activeDocId, changesVersion]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5">
-      <div className="flex shrink-0 items-center justify-between rounded-[5px] border-[1.5px] border-frame bg-paper py-1 pl-3 pr-2">
-        <span className="flex items-center gap-2 py-1.5 text-[13.5px] font-semibold text-ink">
-          <History size={15} />
-          Changes
+    <div className="flex h-full min-h-0 flex-col bg-paper">
+      <div className="flex shrink-0 items-center justify-between border-b border-line py-2 pl-3 pr-2">
+        <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-ink">
+          <History size={15} className="shrink-0" />
+          AI changes
           {activeDoc && <span className="max-w-36 truncate font-normal text-muted">· {activeDoc.title}</span>}
         </span>
         <button
-          onClick={() => ws.setLeftView("chat")}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-cream"
+          onClick={ws.closePanel}
+          title="Close panel"
+          aria-label="Close panel"
+          className="shrink-0 rounded-md p-1.5 text-ink-soft transition-colors hover:bg-canvas hover:text-ink"
         >
-          <MessageSquare size={13} />
-          Back to chat
+          <X size={16} />
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto rounded-[5px] border-[1.5px] border-frame bg-paper px-3 py-3.5">
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-3 py-3.5">
         {!activeDocId && (
           <p className="px-1 py-2 text-[13px] leading-relaxed text-muted">
             Open a document to see its edit history. Every AI edit is recorded here so you
@@ -107,7 +108,7 @@ export default function ChangesPanel() {
                 {change.ops?.length > 0 && change.beforeHtml != null && (
                   <button
                     onClick={() => setOpenDiffId(openDiffId === change.id ? null : change.id)}
-                    className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                    className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
                   >
                     {openDiffId === change.id ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                     {openDiffId === change.id ? "Hide diff" : "View diff"}
@@ -116,7 +117,7 @@ export default function ChangesPanel() {
                 {change.status !== "rejected" && change.beforeHtml != null && (
                   <button
                     onClick={() => setConfirmChange(change)}
-                    className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-cream"
+                    className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-canvas"
                   >
                     <RotateCcw size={11} />
                     Restore

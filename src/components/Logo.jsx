@@ -1,26 +1,27 @@
-// The SuperDocs mascot — a little document wearing a cape.
+// The MagicPen mark — a fountain-pen nib with a magic sparkle.
 export function LogoMark({ size = 34 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      {/* cape */}
+      {/* nib body */}
       <path
-        d="M12 14 C6 20, 4 30, 7 39 C11 36, 13 35, 15 36 L14 18 Z"
-        fill="#e8684a"
+        d="M22 10 C28.9 10 34 15.1 34 21.8 C34 29.8 26.4 37.6 22 43 C17.6 37.6 10 29.8 10 21.8 C10 15.1 15.1 10 22 10 Z"
+        fill="#1a73e8"
       />
+      {/* right-half shading */}
       <path
-        d="M36 14 C42 20, 44 30, 41 39 C37 36, 35 35, 33 36 L34 18 Z"
-        fill="#d5583b"
+        d="M22 10 C28.9 10 34 15.1 34 21.8 C34 29.8 26.4 37.6 22 43 Z"
+        fill="#174ea6"
       />
-      {/* sheet */}
-      <rect x="13" y="6" width="22" height="30" rx="4" fill="#ffffff" stroke="#23211d" strokeWidth="2.2" />
-      {/* folded corner */}
-      <path d="M29 6 L35 12 L29 12 Z" fill="#f0eee6" stroke="#23211d" strokeWidth="1.6" strokeLinejoin="round" />
-      {/* face */}
-      <circle cx="20.5" cy="18.5" r="1.7" fill="#23211d" />
-      <circle cx="27.5" cy="18.5" r="1.7" fill="#23211d" />
-      <path d="M20.5 24.5 Q24 27.5 27.5 24.5" stroke="#23211d" strokeWidth="1.9" strokeLinecap="round" fill="none" />
-      {/* text lines */}
-      <path d="M18 31 H30" stroke="#d8d4c8" strokeWidth="1.8" strokeLinecap="round" />
+      {/* breather hole */}
+      <circle cx="22" cy="22.5" r="2.7" fill="#ffffff" />
+      {/* slit */}
+      <path d="M22 25.8 V38.5" stroke="#ffffff" strokeWidth="1.9" strokeLinecap="round" />
+      {/* sparkle */}
+      <path
+        d="M38.5 3 L40.4 8.1 L45.5 10 L40.4 11.9 L38.5 17 L36.6 11.9 L31.5 10 L36.6 8.1 Z"
+        fill="#1a73e8"
+      />
+      <circle cx="43.5" cy="18.5" r="1.7" fill="#174ea6" />
     </svg>
   );
 }
@@ -30,7 +31,7 @@ export default function Logo({ compact = false }) {
     <span className="flex select-none items-center gap-2">
       <LogoMark size={compact ? 30 : 34} />
       {!compact && (
-        <span className="text-[21px] font-bold tracking-tight text-ink">SuperDocs</span>
+        <span className="font-display text-[21px] font-bold tracking-tight text-ink">MagicPen</span>
       )}
     </span>
   );

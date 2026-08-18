@@ -19,7 +19,7 @@ export default function AppGate() {
 
   if (!user) {
     return (
-      <main className="flex h-dvh flex-col items-center justify-center gap-4 bg-cream">
+      <main className="flex h-dvh flex-col items-center justify-center gap-4 bg-canvas">
         <LogoMark size={56} />
         <p className="flex items-center gap-2 text-[13.5px] text-muted">
           <Loader2 size={15} className="animate-spin" /> Opening your workspace…

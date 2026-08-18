@@ -96,7 +96,7 @@ export async function POST(request) {
         error: String(err?.message || err), code: err?.code || null,
         slackError: err?.data?.error || null,
       }).catch(() => {});
-      console.error("[superdocs/slack] event handler failed:", err);
+      console.error("[magicpen/slack] event handler failed:", err);
     }
   });
 

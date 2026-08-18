@@ -9,8 +9,8 @@ import { SignJWT, jwtVerify } from "jose";
 
 const scrypt = promisify(scryptCb);
 
-export const SESSION_COOKIE = "superdocs_session";
-export const GUEST_COOKIE = "superdocs_guest";
+export const SESSION_COOKIE = "mp_session";
+export const GUEST_COOKIE = "mp_guest";
 const SESSION_DAYS = 30;
 const GUEST_DAYS = 90;
 const SCRYPT_KEYLEN = 64;
@@ -39,7 +39,7 @@ export async function verifyPassword(password, stored) {
 // AUTH_SECRET from env; in dev we generate one once and keep it in .data/ so
 // sessions survive restarts without any configuration.
 async function getSecret() {
-  if (globalThis.__superdocsAuthSecret) return globalThis.__superdocsAuthSecret;
+  if (globalThis.__magicpenAuthSecret) return globalThis.__magicpenAuthSecret;
 
   let secret = process.env.AUTH_SECRET;
   if (!secret) {
@@ -51,19 +51,19 @@ async function getSecret() {
       await fs.mkdir(path.dirname(file), { recursive: true }).catch(() => {});
       await fs.writeFile(file, secret).catch(() => {});
       console.warn(
-        "[superdocs] AUTH_SECRET not set — generated a dev secret in .data/auth-secret. Set AUTH_SECRET in production."
+        "[magicpen] AUTH_SECRET not set — generated a dev secret in .data/auth-secret. Set AUTH_SECRET in production."
       );
     }
   }
-  globalThis.__superdocsAuthSecret = new TextEncoder().encode(secret);
-  return globalThis.__superdocsAuthSecret;
+  globalThis.__magicpenAuthSecret = new TextEncoder().encode(secret);
+  return globalThis.__magicpenAuthSecret;
 }
 
 export async function createSessionToken(user) {
   return new SignJWT({ email: user.email, name: user.name || null })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
-    .setIssuer("superdocs")
+    .setIssuer("magicpen")
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DAYS}d`)
     .sign(await getSecret());
@@ -99,7 +99,7 @@ export async function createGuestToken({ id, name }) {
   return new SignJWT({ name: name || null, kind: "guest" })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(id)
-    .setIssuer("superdocs")
+    .setIssuer("magicpen")
     .setIssuedAt()
     .setExpirationTime(`${GUEST_DAYS}d`)
     .sign(await getSecret());
@@ -114,7 +114,7 @@ export async function getGuestFromRequest(request) {
   const token = readCookie(request, GUEST_COOKIE);
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, await getSecret(), { issuer: "superdocs" });
+    const { payload } = await jwtVerify(token, await getSecret(), { issuer: "magicpen" });
     if (!payload.sub || payload.kind !== "guest") return null;
     return { id: payload.sub, name: payload.name || null };
   } catch {
@@ -127,7 +127,7 @@ export async function getUserFromRequest(request) {
   const token = readSessionCookie(request);
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, await getSecret(), { issuer: "superdocs" });
+    const { payload } = await jwtVerify(token, await getSecret(), { issuer: "magicpen" });
     if (!payload.sub) return null;
     return { id: payload.sub, email: payload.email || null, name: payload.name || null };
   } catch {

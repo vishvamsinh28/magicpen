@@ -82,17 +82,15 @@ function CollabEditor({ info, token, onEditorReady, onSavedHtml }) {
 
   return (
     <>
-      <div className="mb-2.5 flex items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <Toolbar editor={editor} />
-        </div>
+      <div className="mb-3">
+        <Toolbar editor={editor} />
       </div>
       {!online && (
         <p className="mb-2 flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-800">
           <CloudOff size={13} /> Reconnecting — your changes are saved locally and will sync.
         </p>
       )}
-      <div className="doc-editor mx-auto w-[850px] max-w-full cursor-text rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px]">
+      <div className="doc-editor mx-auto w-[850px] max-w-full cursor-text rounded-[4px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px]">
         <EditorContent editor={editor} />
       </div>
       <PresenceHidden peers={peers} selfId={info.actor?.id} />
@@ -103,7 +101,7 @@ function CollabEditor({ info, token, onEditorReady, onSavedHtml }) {
 // Presence lives in the header, so the editor just publishes upward.
 function PresenceHidden({ peers, selfId }) {
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent("sd-peers", { detail: { peers, selfId } }));
+    window.dispatchEvent(new CustomEvent("mp-peers", { detail: { peers, selfId } }));
   }, [peers, selfId]);
   return null;
 }
@@ -148,7 +146,7 @@ function ReadOnlyDoc({ info, token, onEditorReady }) {
   }, [token, editor]);
 
   return (
-    <div className="doc-editor mx-auto w-[850px] max-w-full rounded-[3px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px]">
+    <div className="doc-editor mx-auto w-[850px] max-w-full rounded-[4px] bg-paper px-7 py-12 shadow-card ring-1 ring-line md:px-[88px] md:py-[76px]">
       <EditorContent editor={editor} />
     </div>
   );
@@ -179,8 +177,8 @@ export default function SharedDoc({ token }) {
 
   useEffect(() => {
     const onPeers = (e) => setPeers(e.detail.peers || []);
-    window.addEventListener("sd-peers", onPeers);
-    return () => window.removeEventListener("sd-peers", onPeers);
+    window.addEventListener("mp-peers", onPeers);
+    return () => window.removeEventListener("mp-peers", onPeers);
   }, []);
 
   const onEditorReady = useCallback((ed) => setEditor(ed), []);
@@ -231,15 +229,15 @@ export default function SharedDoc({ token }) {
 
   if (error) {
     return (
-      <main className="flex h-dvh flex-col items-center justify-center gap-3 bg-cream px-6 text-center">
+      <main className="flex h-dvh flex-col items-center justify-center gap-3 bg-canvas px-6 text-center">
         <TriangleAlert size={30} className="text-accent" />
         <h1 className="text-[19px] font-bold text-ink">This link isn&apos;t working</h1>
         <p className="max-w-sm text-[13.5px] leading-relaxed text-muted">{error}</p>
         <a
           href="/"
-          className="mt-2 rounded-lg border-[1.5px] border-frame bg-paper px-4 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-cream"
+          className="mt-2 rounded-full border border-line-strong bg-paper px-4 py-2 text-[13.5px] font-semibold text-ink transition-colors hover:bg-canvas"
         >
-          Go to SuperDocs
+          Go to MagicPen
         </a>
       </main>
     );
@@ -247,7 +245,7 @@ export default function SharedDoc({ token }) {
 
   if (!info) {
     return (
-      <main className="flex h-dvh flex-col items-center justify-center gap-3 bg-cream">
+      <main className="flex h-dvh flex-col items-center justify-center gap-3 bg-canvas">
         <Loader2 size={20} className="animate-spin text-accent" />
         <p className="text-[13.5px] text-muted">Opening the document…</p>
       </main>
@@ -258,13 +256,13 @@ export default function SharedDoc({ token }) {
   const canComment = info.role === "comment" || info.role === "edit";
 
   return (
-    <div className="flex h-dvh flex-col bg-cream">
-      <header className="flex shrink-0 items-center gap-2 px-3 py-2.5 md:px-5">
-        <a href="/" className="flex shrink-0 items-center gap-2" aria-label="SuperDocs">
+    <div className="flex h-dvh flex-col bg-canvas-deep">
+      <header className="flex shrink-0 items-center gap-2 border-b border-line bg-paper px-3 py-2 md:px-4">
+        <a href="/" className="flex shrink-0 items-center gap-2" aria-label="MagicPen">
           <Logo />
         </a>
         <span className="mx-1 hidden h-5 w-px bg-line sm:block" />
-        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">
+        <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium text-ink">
           {info.document.title}
         </span>
 
@@ -279,14 +277,14 @@ export default function SharedDoc({ token }) {
           <button
             onClick={() => setCommentsOpen((v) => !v)}
             aria-pressed={commentsOpen}
-            className={`flex items-center gap-1.5 rounded-lg border-[1.5px] px-2.5 py-2 text-[13px] font-semibold transition-colors ${
+            title="Comments"
+            className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
               commentsOpen
-                ? "border-accent bg-accent-soft text-accent-deep"
-                : "border-frame bg-paper text-ink hover:bg-cream"
+                ? "bg-accent-soft text-accent-deep"
+                : "text-ink-soft hover:bg-canvas hover:text-ink"
             }`}
           >
-            <MessageSquareText size={15} />
-            <span className="hidden md:inline">Comments</span>
+            <MessageSquareText size={17} strokeWidth={2} />
           </button>
         )}
 
@@ -295,7 +293,7 @@ export default function SharedDoc({ token }) {
             align="right"
             items={FORMATS.map((f) => ({ label: f.label, onSelect: () => download(f.value) }))}
             trigger={
-              <button className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-white shadow-card transition-colors hover:bg-accent-deep">
+              <button className="flex items-center gap-2 rounded-full bg-accent px-3.5 py-2 text-[13px] font-semibold text-white shadow-card transition-colors hover:bg-accent-deep">
                 {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
                 <span className="hidden md:inline">Download</span>
               </button>
@@ -304,9 +302,9 @@ export default function SharedDoc({ token }) {
         )}
       </header>
 
-      <main className="flex min-h-0 flex-1 gap-3 px-3 pb-3 md:px-5 md:pb-4">
+      <main className="relative flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-[5px] border-[1.5px] border-frame bg-parchment px-3 py-6 md:px-10 md:py-9">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 md:px-10 md:py-8">
             {info.role === "edit" ? (
               <CollabEditor
                 info={info}
@@ -321,7 +319,9 @@ export default function SharedDoc({ token }) {
         </section>
 
         {canComment && commentsOpen && (
-          <aside className="hidden w-[340px] shrink-0 lg:flex lg:flex-col">
+          // A docked column on desktop; slides over the document on smaller
+          // screens so comments stay reachable everywhere.
+          <aside className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[380px] shrink-0 flex-col border-l border-line bg-paper shadow-pop lg:static lg:z-auto lg:w-[340px] lg:max-w-none lg:shadow-none">
             <CommentsSidebar
               documentId={info.document.id}
               editor={editor}

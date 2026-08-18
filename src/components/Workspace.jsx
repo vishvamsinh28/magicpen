@@ -1,34 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, FileText, TriangleAlert } from "lucide-react";
+import { FileText, Sparkles, TriangleAlert } from "lucide-react";
 import { WorkspaceProvider, useWorkspace } from "./workspace-context";
 import PrintSheet from "./PrintSheet";
 import Header from "./shell/Header";
-import IconRail from "./shell/IconRail";
-import NavDrawer from "./shell/NavDrawer";
+import SideRail from "./shell/SideRail";
 import ChatPanel from "./chat/ChatPanel";
 import ChangesPanel from "./panels/ChangesPanel";
 import VersionsPanel from "./panels/VersionsPanel";
 import CommentsPanel from "./panels/CommentsPanel";
+import DocumentsPanel from "./panels/DocumentsPanel";
+import HistoryPanel from "./panels/HistoryPanel";
 import ShareModal from "./modals/ShareModal";
 import EditorPane from "./editor/EditorPane";
+import Toolbar from "./editor/Toolbar";
 import FilesModal from "./modals/FilesModal";
 import TemplatesModal from "./modals/TemplatesModal";
-import ChatHistoryDrawer from "./modals/ChatHistoryDrawer";
 import InfoModals from "./modals/InfoModals";
 import PromptDialog from "./ui/PromptDialog";
 
-// Mobile-only segmented control under the header (desktop shows both panes
-// side by side). Styled like the header's document tabs.
+// Mobile-only segmented control under the menu bar (desktop shows the panel
+// beside the document instead).
 function MobilePaneSwitcher() {
   const ws = useWorkspace();
-  const tab = (pane, icon, label) => (
+  const tab = (pane, icon, label, onClick) => (
     <button
-      onClick={() => ws.setMobilePane(pane)}
+      onClick={onClick}
       aria-pressed={ws.mobilePane === pane}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-[5px] px-4 py-2 text-[13px] font-semibold transition-colors ${
-        ws.mobilePane === pane ? "bg-ink text-white shadow-card" : "text-ink-soft hover:bg-cream"
+      className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors ${
+        ws.mobilePane === pane ? "bg-paper text-ink shadow-card" : "text-ink-soft"
       }`}
     >
       {icon}
@@ -36,16 +37,61 @@ function MobilePaneSwitcher() {
     </button>
   );
   return (
-    <div className="px-3 pb-2.5 lg:hidden">
-      <div className="flex gap-1 rounded-lg border-[1.5px] border-frame bg-paper p-1">
-        {tab("chat", <MessageSquare size={14} />, "Chat")}
-        {tab("editor", <FileText size={14} />, "Editor")}
+    <div className="border-b border-line bg-paper px-3 pb-2 lg:hidden">
+      <div className="flex gap-1 rounded-full bg-canvas p-1">
+        {tab("editor", <FileText size={14} />, "Document", () => ws.setMobilePane("editor"))}
+        {tab("chat", <Sparkles size={14} />, "Assistant", () => {
+          // Land on whichever panel view is open; default to the AI chat.
+          if (!ws.panel) ws.openPanel("chat");
+          else ws.setMobilePane("chat");
+        })}
       </div>
     </div>
   );
 }
 
-// One dialog serves every "Commit version" entry point (header, rail, panel).
+// The chrome row is just the formatting toolbar now — there is no menu bar;
+// document management lives in the right rail's panels. Hidden on mobile
+// while the assistant pane is active, dimmed while a version preview or
+// review diff overlays the editor, mirroring EditorPane.
+function ChromeRow() {
+  const ws = useWorkspace();
+  if (!ws.editorInstance) return null;
+  const overlayActive =
+    (!!ws.versionPreview && ws.versionPreview.docId === ws.activeDocId) ||
+    (!!ws.pendingChange && (ws.pendingChange.docId ?? null) === (ws.activeDocId ?? null));
+  return (
+    <div
+      className={`${
+        ws.mobilePane === "editor" ? "flex" : "hidden lg:flex"
+      } shrink-0 items-center gap-0.5 overflow-x-auto border-b border-line bg-paper px-2 py-1 md:px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+        overlayActive ? "pointer-events-none opacity-60" : ""
+      }`}
+      aria-disabled={overlayActive}
+    >
+      <Toolbar
+        editor={ws.editorInstance}
+        findOpen={ws.findOpen}
+        onToggleFind={ws.toggleFind}
+        variant="inline"
+      />
+    </div>
+  );
+}
+
+// The collapsible side panel between the canvas and the rail.
+function SidePanel() {
+  const ws = useWorkspace();
+  const view = ws.panel ?? "chat";
+  if (view === "docs") return <DocumentsPanel />;
+  if (view === "history") return <HistoryPanel />;
+  if (view === "comments") return <CommentsPanel />;
+  if (view === "versions") return <VersionsPanel />;
+  if (view === "changes") return <ChangesPanel />;
+  return <ChatPanel />;
+}
+
+// One dialog serves every "Commit version" entry point (menu, panel).
 function CommitDialog() {
   const ws = useWorkspace();
   const [busy, setBusy] = useState(false);
@@ -74,8 +120,8 @@ function Toast() {
   if (!ws.toast) return null;
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[110] flex justify-center px-4">
-      <div className="sd-pop-in pointer-events-auto flex max-w-md items-start gap-2.5 rounded-xl border border-frame bg-ink px-4 py-3 text-[13px] leading-snug text-white shadow-pop">
-        {ws.toast.type === "error" && <TriangleAlert size={15} className="mt-0.5 shrink-0 text-accent" />}
+      <div className="mp-pop-in pointer-events-auto flex max-w-md items-start gap-2.5 rounded-xl bg-ink px-4 py-3 text-[13px] leading-snug text-white shadow-pop">
+        {ws.toast.type === "error" && <TriangleAlert size={15} className="mt-0.5 shrink-0 text-[#8ab4f8]" />}
         <span>{ws.toast.message}</span>
       </div>
     </div>
@@ -85,41 +131,32 @@ function Toast() {
 function Shell() {
   const ws = useWorkspace();
   return (
-    <div className="app-root flex h-dvh flex-col bg-cream">
+    <div className="app-root flex h-dvh flex-col bg-canvas-deep">
       <Header />
+      <ChromeRow />
       <MobilePaneSwitcher />
       <div className="flex min-h-0 flex-1">
-        <IconRail />
-        <main className="flex min-h-0 min-w-0 flex-1 gap-3 px-3 pb-3 md:px-5 md:pb-4 lg:pl-1">
-          <div
-            className={`${
-              ws.mobilePane === "chat" ? "flex" : "hidden"
-            } h-full w-full min-w-0 flex-col lg:flex lg:w-[372px] lg:shrink-0`}
-          >
-            {ws.leftView === "chat" ? (
-              <ChatPanel />
-            ) : ws.leftView === "versions" ? (
-              <VersionsPanel />
-            ) : ws.leftView === "comments" ? (
-              <CommentsPanel />
-            ) : (
-              <ChangesPanel />
-            )}
-          </div>
-          <div
-            className={`${
-              ws.mobilePane === "editor" ? "flex" : "hidden"
-            } h-full w-full min-w-0 flex-1 lg:flex`}
-          >
-            <EditorPane />
-          </div>
+        <main
+          className={`${
+            ws.mobilePane === "editor" ? "flex" : "hidden"
+          } h-full min-w-0 flex-1 lg:flex`}
+        >
+          <EditorPane />
         </main>
+        <aside
+          className={`${
+            ws.mobilePane === "chat" ? "flex" : "hidden"
+          } h-full w-full min-w-0 flex-col border-line bg-paper lg:w-[360px] lg:shrink-0 lg:border-l ${
+            ws.panel ? "lg:flex" : "lg:hidden"
+          }`}
+        >
+          <SidePanel />
+        </aside>
+        <SideRail />
       </div>
 
-      <NavDrawer />
       <FilesModal />
       <TemplatesModal />
-      <ChatHistoryDrawer />
       <InfoModals />
       <ShareModal />
       <CommitDialog />

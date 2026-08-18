@@ -22,7 +22,7 @@ export async function POST(request) {
     const parsed = await parseFileToHtml({ buffer, filename: file.name });
     return Response.json({ attachment: { name: file.name, text: parsed.text } });
   } catch (err) {
-    console.error("[superdocs] attachment parse failed:", err);
+    console.error("[magicpen] attachment parse failed:", err);
     const message =
       err.code === "unsupported_type" ? err.message : `Couldn't read "${file.name}".`;
     return Response.json({ error: { message } }, { status: 415 });
